@@ -36,7 +36,7 @@ namespace OfflineChatBot.Views
         {
             if (sender is FrameworkElement element && element.DataContext is ModelInfo model)
             {
-                var result = MessageBox.Show($"Are you sure you want to delete the model file for {model.Name}?", "Confirm Deletion", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                var result = CustomMessageBoxWindow.Show($"Are you sure you want to delete the model file for {model.Name}?", "Confirm Deletion", MessageBoxButton.YesNo, this);
                 if (result == MessageBoxResult.Yes)
                 {
                     await ViewModel.DeleteModelAsync(model);

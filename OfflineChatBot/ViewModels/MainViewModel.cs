@@ -205,7 +205,7 @@ namespace OfflineChatBot.ViewModels
             
             if (pendingModels.Count == 0)
             {
-                MessageBox.Show("All available models are already downloaded!", "Model Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+                CustomMessageBoxWindow.Show("All available models are already downloaded!", "Model Manager", MessageBoxButton.OK);
             
                 return;
             }

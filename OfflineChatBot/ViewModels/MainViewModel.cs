@@ -112,6 +112,10 @@ namespace OfflineChatBot.ViewModels
         {
             if (session == null) return;
 
+            var result = CustomMessageBoxWindow.Show($"Are you sure you want to delete the chat \"{session.Title}\"?", "Confirm Deletion", MessageBoxButton.YesNo);
+            
+            if (result != MessageBoxResult.Yes) return;
+
             Sessions.Remove(session);
 
             if (CurrentSession == session)

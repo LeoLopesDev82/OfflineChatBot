@@ -1,0 +1,438 @@
+<Window x:Class="OfflineChatBot.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:OfflineChatBot"
+        xmlns:vm="clr-namespace:OfflineChatBot.ViewModels"
+        xmlns:views="clr-namespace:OfflineChatBot.Views"
+        xmlns:converters="clr-namespace:OfflineChatBot.Converters"
+        xmlns:helpers="clr-namespace:OfflineChatBot.Helpers"
+        xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+        mc:Ignorable="d"
+        Title="OfflineChatBot - Embedded Local AI" Height="740" Width="1120"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BgPrimaryBrush}">
+
+    <Window.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisConverter"/>
+        <converters:InverseBoolToVisibilityConverter x:Key="InvBoolToVisConverter"/>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="270"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ==================== SIDEBAR ==================== -->
+        <Border Grid.Column="0"
+                Background="{StaticResource BgSidebarBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,1,0">
+            <Grid Margin="14">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- App Logo / Title -->
+                <StackPanel Grid.Row="0" Margin="4,8,4,16">
+                    <StackPanel Orientation="Horizontal">
+                        <iconPacks:PackIconBootstrapIcons Kind="CpuFill" Width="20" Height="20" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="OfflineChatBot"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   FontSize="20"
+                                   FontWeight="Bold"/>
+                    </StackPanel>
+                    <TextBlock Text="100% Embedded C# AI"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               FontSize="11"
+                               Margin="28,2,0,0"/>
+                </StackPanel>
+
+                <!-- New Chat Button -->
+                <Button Grid.Row="1"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        HorizontalAlignment="Stretch"
+                        Margin="0,0,0,14"
+                        Command="{Binding CreateNewChatCommand}">
+                    <Button.ContentTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <iconPacks:PackIconBootstrapIcons Kind="PlusLg" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="New Chat" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </Button.ContentTemplate>
+                </Button>
+
+                <!-- Sessions List -->
+                <ListBox Grid.Row="2"
+                         ItemsSource="{Binding Sessions}"
+                         SelectedItem="{Binding CurrentSession}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         HorizontalContentAlignment="Stretch"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Padding" Value="10,10"/>
+                            <Setter Property="Margin" Value="0,3"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="border"
+                                                Background="Transparent"
+                                                CornerRadius="8"
+                                                Padding="{TemplateBinding Padding}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <iconPacks:PackIconBootstrapIcons Grid.Column="0"
+                                                                                  Kind="ChatLeftText"
+                                                                                  Width="13"
+                                                                                  Height="13"
+                                                                                  Foreground="{StaticResource TextSecondaryBrush}"
+                                                                                  VerticalAlignment="Center"
+                                                                                  Margin="0,0,8,0"/>
+
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding Title}"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                           FontSize="13"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center"/>
+
+                                                <Button Grid.Column="2"
+                                                        ToolTip="Delete Chat"
+                                                        Background="Transparent"
+                                                        Foreground="{StaticResource TextSecondaryBrush}"
+                                                        BorderThickness="0"
+                                                        Margin="4,0,0,0"
+                                                        Cursor="Hand"
+                                                        Command="{Binding DataContext.DeleteChatCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}">
+                                                    <iconPacks:PackIconBootstrapIcons Kind="Trash3" Width="13" Height="13"/>
+                                                </Button>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="border" Property="Background" Value="{StaticResource BgCardBrush}"/>
+                                            </Trigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="border" Property="Background" Value="#2A2B3C"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                </ListBox>
+
+                <!-- Model Selector Card at Sidebar Bottom -->
+                <Border Grid.Row="3"
+                        Background="{StaticResource BgCardBrush}"
+                        CornerRadius="12"
+                        Padding="12"
+                        Margin="0,10,0,0">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <iconPacks:PackIconBootstrapIcons Kind="Cpu" Width="12" Height="12" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="AI Model:"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"/>
+                        </StackPanel>
+
+                        <ComboBox ItemsSource="{Binding DownloadedModels}"
+                                  SelectedItem="{Binding SelectedModel}"
+                                  DisplayMemberPath="Name"
+                                  Margin="0,0,0,8"/>
+
+                        <Button Style="{StaticResource PrimaryButtonStyle}"
+                                FontSize="11"
+                                Command="{Binding OpenModelManagerCommand}">
+                            <Button.ContentTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <iconPacks:PackIconBootstrapIcons Kind="Gear" Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <TextBlock Text="Model Manager..." VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </Button.ContentTemplate>
+                        </Button>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- ==================== CHAT AREA ==================== -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Chat Header -->
+            <Border Grid.Row="0"
+                    Background="{StaticResource BgSidebarBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="0,0,0,1"
+                    Padding="20,14">
+                <Grid>
+                    <TextBlock Text="{Binding CurrentSession.Title, FallbackValue='Chat'}"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               FontSize="16"
+                               FontWeight="Bold"
+                               VerticalAlignment="Center"/>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Border Background="{StaticResource BgCardBrush}"
+                                CornerRadius="12"
+                                Padding="12,5">
+                            <StackPanel Orientation="Horizontal">
+                                <iconPacks:PackIconBootstrapIcons Kind="CpuFill" Width="12" Height="12" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <TextBlock Text="{Binding SelectedModel.Name, FallbackValue='No model selected'}"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           FontSize="12"
+                                           FontWeight="Bold"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Chat Feed ScrollViewer & ItemsControl -->
+            <ScrollViewer Grid.Row="1"
+                          x:Name="ChatScrollViewer"
+                          Padding="28,20"
+                          VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding CurrentSession.Messages}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,10">
+                                <Grid.Style>
+                                    <Style TargetType="Grid">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsUser}" Value="True">
+                                                <Setter Property="HorizontalAlignment" Value="Right"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsUser}" Value="False">
+                                                <Setter Property="HorizontalAlignment" Value="Left"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Grid.Style>
+
+                                <!-- Message Bubble -->
+                                <Border x:Name="MsgBorder"
+                                        Padding="16,12"
+                                        MaxWidth="720">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsUser}" Value="True">
+                                                    <Setter Property="Background" Value="{StaticResource UserBubbleBrush}"/>
+                                                    <Setter Property="CornerRadius" Value="16,16,4,16"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsUser}" Value="False">
+                                                    <Setter Property="Background" Value="{StaticResource AssistantBubbleBrush}"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                                                    <Setter Property="BorderThickness" Value="1"/>
+                                                    <Setter Property="CornerRadius" Value="16,16,16,4"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+
+                                    <StackPanel>
+                                        <!-- Sender Header -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsUser}" Value="True">
+                                                            <Setter Property="HorizontalAlignment" Value="Right"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsUser}" Value="False">
+                                                            <Setter Property="HorizontalAlignment" Value="Left"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+
+                                            <!-- Sender Icon -->
+                                            <iconPacks:PackIconBootstrapIcons Width="12" Height="12" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,6,0">
+                                                <iconPacks:PackIconBootstrapIcons.Style>
+                                                    <Style TargetType="iconPacks:PackIconBootstrapIcons">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsUser}" Value="True">
+                                                                <Setter Property="Kind" Value="PersonFill"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsUser}" Value="False">
+                                                                <Setter Property="Kind" Value="CpuFill"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </iconPacks:PackIconBootstrapIcons.Style>
+                                            </iconPacks:PackIconBootstrapIcons>
+
+                                            <!-- Sender Name -->
+                                            <TextBlock Foreground="{StaticResource AccentBrush}"
+                                                       FontSize="11"
+                                                       FontWeight="Bold">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsUser}" Value="True">
+                                                                <Setter Property="Text" Value="You"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsUser}" Value="False">
+                                                                <Setter Property="Text" Value="Local AI"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+
+                                        <!-- Thinking Indicator when AI is preparing response -->
+                                        <StackPanel Orientation="Horizontal"
+                                                    Margin="0,4"
+                                                    Visibility="{Binding IsThinking, Converter={StaticResource BoolToVisConverter}}">
+                                            <iconPacks:PackIconBootstrapIcons Kind="CpuFill" Width="13" Height="13" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                            <TextBlock Text="Local AI is thinking"
+                                                       Foreground="{StaticResource AccentBrush}"
+                                                       FontSize="13"
+                                                       FontStyle="Italic"
+                                                       FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding ThinkingDots}"
+                                                       Foreground="{StaticResource AccentBrush}"
+                                                       FontSize="13"
+                                                       FontStyle="Italic"
+                                                       FontWeight="Bold"/>
+                                        </StackPanel>
+
+                                        <!-- Message Content (Sequential Text and Code Segments) -->
+                                        <ItemsControl ItemsSource="{Binding Segments}"
+                                                      Visibility="{Binding IsThinking, Converter={StaticResource InvBoolToVisConverter}}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,2">
+                                                        <!-- Text Segment with Rich Markdown Formatting -->
+                                                        <TextBlock helpers:MarkdownHelper.MarkdownText="{Binding Text}"
+                                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                                   FontSize="14"
+                                                                   TextWrapping="Wrap"
+                                                                   LineHeight="22"
+                                                                   Visibility="{Binding IsCode, Converter={StaticResource InvBoolToVisConverter}}"/>
+
+                                                        <!-- Code Segment -->
+                                                        <views:CodeBlockControl CodeLanguage="{Binding Language}"
+                                                                                Code="{Binding Code}"
+                                                                                Visibility="{Binding IsCode, Converter={StaticResource BoolToVisConverter}}"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Status / Download Bar -->
+            <Border Grid.Row="2"
+                    Background="{StaticResource BgCardBrush}"
+                    Padding="14,8"
+                    Visibility="{Binding IsDownloadingModel, Converter={StaticResource BoolToVisConverter}}">
+                <Grid>
+                    <TextBlock Text="{Binding StatusMessage}"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               FontSize="12"
+                               VerticalAlignment="Center"/>
+
+                    <ProgressBar Value="{Binding DownloadProgress}"
+                                 Maximum="100"
+                                 Height="8"
+                                 Width="220"
+                                 HorizontalAlignment="Right"/>
+                </Grid>
+            </Border>
+
+            <!-- Message Input Bar (Floating Modern Card) -->
+            <Border Grid.Row="3"
+                    Background="{StaticResource BgSidebarBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="0,1,0,0"
+                    Padding="20,14">
+                <Border Background="{StaticResource BgInputBrush}"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="16"
+                        Padding="4">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBox Grid.Column="0"
+                                 Text="{Binding UserInput, UpdateSourceTrigger=PropertyChanged}"
+                                 Background="Transparent"
+                                 Foreground="{StaticResource TextPrimaryBrush}"
+                                 BorderThickness="0"
+                                 Padding="14,10"
+                                 FontSize="14"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 MaxHeight="120"
+                                 VerticalScrollBarVisibility="Auto"
+                                 PreviewKeyDown="UserInput_PreviewKeyDown"/>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="4,4,8,4" VerticalAlignment="Bottom">
+                            <Button Style="{StaticResource PrimaryButtonStyle}"
+                                    Command="{Binding SendMessageCommand}"
+                                    Visibility="{Binding IsGenerating, Converter={StaticResource InvBoolToVisConverter}}">
+                                <Button.ContentTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Send" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                            <iconPacks:PackIconBootstrapIcons Kind="SendFill" Width="12" Height="12" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </Button.ContentTemplate>
+                            </Button>
+
+                            <Button Style="{StaticResource SecondaryButtonStyle}"
+                                    Command="{Binding StopGenerationCommand}"
+                                    Visibility="{Binding IsGenerating, Converter={StaticResource BoolToVisConverter}}">
+                                <Button.ContentTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <iconPacks:PackIconBootstrapIcons Kind="StopFill" Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                            <TextBlock Text="Stop" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </Button.ContentTemplate>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

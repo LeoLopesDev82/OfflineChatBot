@@ -22,6 +22,16 @@ namespace OfflineChatBot
             Loaded += MainWindow_Loaded;
         }
 
+        #region Event Handlers
+
+        private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (ShouldIgnoreClickForEditMode(e.OriginalSource as DependencyObject))
+                return;
+
+            CloseAllEditModesAndSave();
+        }
+
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             await ViewModel.InitializeAsync();
@@ -31,8 +41,6 @@ namespace OfflineChatBot
             SubscribeToCurrentSession();
             ScrollToBottom();
         }
-
-        #region Title Bar Buttons
 
         private void BtnMinimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
         
@@ -46,8 +54,6 @@ namespace OfflineChatBot
 
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
 
-        #endregion 
-
         private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(ViewModel.CurrentSession))
@@ -55,21 +61,6 @@ namespace OfflineChatBot
                 SubscribeToCurrentSession();
 
                 Dispatcher.InvokeAsync(ScrollToBottom, DispatcherPriority.Background);
-            }
-        }
-
-        private void SubscribeToCurrentSession()
-        {
-            if (ViewModel.CurrentSession != null)
-            {
-                ViewModel.CurrentSession.Messages.CollectionChanged -= Messages_CollectionChanged;
-                ViewModel.CurrentSession.Messages.CollectionChanged += Messages_CollectionChanged;
-
-                foreach (var msg in ViewModel.CurrentSession.Messages)
-                {
-                    msg.PropertyChanged -= Msg_PropertyChanged;
-                    msg.PropertyChanged += Msg_PropertyChanged;
-                }
             }
         }
 
@@ -95,11 +86,6 @@ namespace OfflineChatBot
             }
         }
 
-        private void ScrollToBottom()
-        {
-            try { ChatScrollViewer.ScrollToEnd(); } catch { }
-        }
-
         private void UserInput_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter && !Keyboard.IsKeyDown(Key.LeftShift) && !Keyboard.IsKeyDown(Key.RightShift))
@@ -114,5 +100,160 @@ namespace OfflineChatBot
                 }
             }
         }
+
+        private void RenameChat_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement element && element.DataContext is ChatSession session)
+            {
+                foreach (var s in ViewModel.Sessions)
+                {
+                    s.IsEditing = false;
+                }
+                
+                session.IsEditing = true;
+            }
+        }
+
+        private void TitleTextBox_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.TextBox textBox && textBox.IsVisible)
+            {
+                Dispatcher.InvokeAsync(() => 
+                {
+                    textBox.Focus();
+                    Keyboard.Focus(textBox);
+                    textBox.SelectAll();
+                }, DispatcherPriority.Input);
+            }
+        }
+
+        private void TitleTextBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement element && element.DataContext is ChatSession session)
+            {
+                if (session.IsEditing)
+                {
+                    session.IsEditing = false;
+                    
+                    ViewModel.SaveSessionsSilently();
+                }
+            }
+        }
+
+        private void TitleTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter || e.Key == Key.Escape)
+            {
+                if (sender is FrameworkElement element && element.DataContext is ChatSession session)
+                {
+                    session.IsEditing = false;
+
+                    if (e.Key == Key.Enter)
+                    {
+                        ViewModel.SaveSessionsSilently();
+                    }
+                }
+        
+                e.Handled = true;
+                
+                Keyboard.ClearFocus();
+            }
+        }
+
+        #endregion
+
+        #region Private Methods
+
+        private void SubscribeToCurrentSession()
+        {
+            if (ViewModel.CurrentSession != null)
+            {
+                ViewModel.CurrentSession.Messages.CollectionChanged -= Messages_CollectionChanged;
+                ViewModel.CurrentSession.Messages.CollectionChanged += Messages_CollectionChanged;
+
+                foreach (var msg in ViewModel.CurrentSession.Messages)
+                {
+                    msg.PropertyChanged -= Msg_PropertyChanged;
+                    msg.PropertyChanged += Msg_PropertyChanged;
+                }
+            }
+        }
+
+        private void ScrollToBottom()
+        {
+            try { ChatScrollViewer.ScrollToEnd(); } catch { }
+        }
+
+        private bool ShouldIgnoreClickForEditMode(DependencyObject? src)
+        {
+            if (src == null) return false;
+
+            var btn = FindParent<System.Windows.Controls.Button>(src);
+            
+            if (btn != null && btn.Name == "BtnRename")
+                return true;
+
+            var textBox = FindParent<System.Windows.Controls.TextBox>(src);
+            
+            if (textBox != null)
+                return true;
+
+            return false;
+        }
+
+        private void CloseAllEditModesAndSave()
+        {
+            bool savedAny = false;
+
+            foreach (var session in ViewModel.Sessions)
+            {
+                if (session.IsEditing)
+                {
+                    session.IsEditing = false;
+            
+                    savedAny = true;
+                }
+            }
+
+            if (savedAny)
+            {
+                ViewModel.SaveSessionsSilently();
+                
+                Keyboard.ClearFocus();
+                FocusManager.SetFocusedElement(this, this);
+            }
+        }
+
+        private static T? FindParent<T>(DependencyObject? child) where T : DependencyObject
+        {
+            DependencyObject? parent = child;
+            
+            while (parent != null)
+            {
+                if (parent is T typed) return typed;
+                
+                DependencyObject? logicalParent = LogicalTreeHelper.GetParent(parent);
+                
+                if (logicalParent != null)
+                {
+                    parent = logicalParent;
+                
+                    continue;
+                }
+                
+                if (parent is System.Windows.Media.Visual || parent is System.Windows.Media.Media3D.Visual3D)
+                {
+                    parent = System.Windows.Media.VisualTreeHelper.GetParent(parent);
+                }
+                else
+                {
+                    break;
+                }
+            }
+            
+            return null;
+        }
+
+        #endregion
     }
 }

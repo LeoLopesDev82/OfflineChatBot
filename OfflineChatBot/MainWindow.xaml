@@ -13,7 +13,8 @@
         Title="OfflineChatBot - Embedded Local AI" Height="740" Width="1120"
         WindowStartupLocation="CenterScreen"
         WindowState="Maximized"
-        Background="{StaticResource BgPrimaryBrush}">
+        Background="{StaticResource BgPrimaryBrush}"
+        PreviewMouseDown="Window_PreviewMouseDown">
 
     <Window.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisConverter"/>
@@ -142,27 +143,60 @@
                                                                                   VerticalAlignment="Center"
                                                                                   Margin="0,0,8,0"/>
 
-                                                <TextBlock Grid.Column="1"
-                                                           Text="{Binding Title}"
-                                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                                           FontSize="13"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           VerticalAlignment="Center"/>
+                                                <Grid Grid.Column="1" Margin="0,0,8,0">
+                                                    <TextBlock Text="{Binding Title}"
+                                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                                               FontSize="13"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               VerticalAlignment="Center"
+                                                               Visibility="{Binding IsEditing, Converter={StaticResource InvBoolToVisConverter}}"/>
+                                                    
+                                                    <TextBox Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}"
+                                                             Foreground="{StaticResource TextPrimaryBrush}"
+                                                             Background="{StaticResource BgCardBrush}"
+                                                             BorderBrush="{StaticResource AccentBrush}"
+                                                             BorderThickness="0,0,0,1"
+                                                             FontSize="13"
+                                                             Padding="2,0"
+                                                             VerticalAlignment="Center"
+                                                             Visibility="{Binding IsEditing, Converter={StaticResource BoolToVisConverter}}"
+                                                             LostFocus="TitleTextBox_LostFocus"
+                                                             KeyDown="TitleTextBox_KeyDown"
+                                                             Loaded="TitleTextBox_Loaded"/>
+                                                </Grid>
 
-                                                <Button Grid.Column="2"
-                                                        ToolTip="Delete Chat"
-                                                        Background="Transparent"
-                                                        Foreground="{StaticResource TextSecondaryBrush}"
-                                                        BorderThickness="0"
-                                                        Margin="4,0,0,0"
-                                                        Cursor="Hand"
-                                                        Command="{Binding DataContext.DeleteChatCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                        CommandParameter="{Binding}">
-                                                    <iconPacks:PackIconBootstrapIcons Kind="Trash3" Width="13" Height="13"/>
-                                                </Button>
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                    <Button x:Name="BtnRename"
+                                                            ToolTip="Rename Chat"
+                                                            Background="Transparent"
+                                                            Foreground="{StaticResource TextSecondaryBrush}"
+                                                            BorderThickness="0"
+                                                            Margin="4,0,0,0"
+                                                            Cursor="Hand"
+                                                            Click="RenameChat_Click">
+                                                        <iconPacks:PackIconBootstrapIcons Kind="Pencil" Width="11" Height="11"/>
+                                                    </Button>
+
+                                                    <Button ToolTip="Delete Chat"
+                                                            Background="Transparent"
+                                                            Foreground="{StaticResource TextSecondaryBrush}"
+                                                            BorderThickness="0"
+                                                            Margin="4,0,0,0"
+                                                            Cursor="Hand"
+                                                            Command="{Binding DataContext.DeleteChatCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}">
+                                                        <iconPacks:PackIconBootstrapIcons Kind="Trash3" Width="13" Height="13"/>
+                                                    </Button>
+                                                </StackPanel>
                                             </Grid>
                                         </Border>
                                         <ControlTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                                <Setter TargetName="BtnRename" Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Messages.Count}" Value="0">
+                                                <Setter TargetName="BtnRename" Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
                                             <Trigger Property="IsSelected" Value="True">
                                                 <Setter TargetName="border" Property="Background" Value="{StaticResource BgCardBrush}"/>
                                             </Trigger>

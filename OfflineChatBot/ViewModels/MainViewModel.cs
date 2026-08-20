@@ -434,7 +434,7 @@ namespace OfflineChatBot.ViewModels
             }
         }
 
-        private void SaveSessionsSilently()
+        public void SaveSessionsSilently()
         {
             Task.Run(async () =>
             {

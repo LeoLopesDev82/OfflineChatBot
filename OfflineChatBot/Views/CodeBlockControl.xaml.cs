@@ -28,27 +28,38 @@ namespace OfflineChatBot.Views
             InitializeComponent();
         }
 
+        #region Event Handlers
+
         private void CopyButton_Click(object sender, RoutedEventArgs e)
         {
             if (!string.IsNullOrEmpty(Code))
             {
                 Clipboard.SetText(Code);
+                
                 if (sender is Button btn)
                 {
                     var originalText = btn.Content;
+        
                     btn.Content = "Copied!";
+                    
                     var timer = new System.Windows.Threading.DispatcherTimer
                     {
                         Interval = System.TimeSpan.FromSeconds(2)
                     };
+                    
                     timer.Tick += (s, args) =>
                     {
                         btn.Content = originalText;
+ 
                         timer.Stop();
                     };
+                    
                     timer.Start();
                 }
             }
         }
+
+        #endregion
+
     }
 }

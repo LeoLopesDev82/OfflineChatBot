@@ -15,6 +15,20 @@ namespace OfflineChatBot.Views
             DataContext = viewModel;
         }
 
+        #region Title Bar Buttons
+        private void BtnMinimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+        
+        private void BtnMaximize_Click(object sender, RoutedEventArgs e)
+        {
+            if (WindowState == WindowState.Maximized)
+                WindowState = WindowState.Normal;
+            else
+                WindowState = WindowState.Maximized;
+        }
+
+        private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
+        #endregion
+
         private async void DownloadModel_Click(object sender, RoutedEventArgs e)
         {
             if (sender is FrameworkElement element && element.DataContext is ModelInfo model)
@@ -44,9 +58,6 @@ namespace OfflineChatBot.Views
             }
         }
 
-        private void CloseWindow_Click(object sender, RoutedEventArgs e)
-        {
-            Close();
-        }
+
     }
 }

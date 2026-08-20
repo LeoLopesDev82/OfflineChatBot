@@ -32,6 +32,22 @@ namespace OfflineChatBot
             ScrollToBottom();
         }
 
+        #region Title Bar Buttons
+
+        private void BtnMinimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+        
+        private void BtnMaximize_Click(object sender, RoutedEventArgs e)
+        {
+            if (WindowState == WindowState.Maximized)
+                WindowState = WindowState.Normal;
+            else
+                WindowState = WindowState.Maximized;
+        }
+
+        private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
+
+        #endregion 
+
         private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(ViewModel.CurrentSession))
@@ -81,11 +97,7 @@ namespace OfflineChatBot
 
         private void ScrollToBottom()
         {
-            try
-            {
-                ChatScrollViewer.ScrollToEnd();
-            }
-            catch { }
+            try { ChatScrollViewer.ScrollToEnd(); } catch { }
         }
 
         private void UserInput_PreviewKeyDown(object sender, KeyEventArgs e)

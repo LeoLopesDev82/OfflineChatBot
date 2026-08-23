@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace OfflineChatBot.Helpers
 {
     public static class SizeFormatter
@@ -12,9 +14,9 @@ namespace OfflineChatBot.Helpers
         public static string FromMegabytes(double megabytes)
         {
             if (megabytes >= 1024)
-                return $"{megabytes / 1024.0:F2} GB";
+                return string.Format(CultureInfo.InvariantCulture, "{0:F2} GB", megabytes / 1024.0);
 
-            return $"{megabytes:F0} MB";
+            return string.Format(CultureInfo.InvariantCulture, "{0:F0} MB", megabytes);
         }
 
         public static string FromBytes(long bytes)

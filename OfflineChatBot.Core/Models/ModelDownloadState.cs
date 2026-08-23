@@ -1,3 +1,4 @@
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using OfflineChatBot.Helpers;
 
@@ -36,7 +37,7 @@ namespace OfflineChatBot.Models
         public void Report(DownloadProgress update)
         {
             Progress = update.Percentage;
-            SpeedFormatted = $"{update.SpeedMbPerSecond:F1} MB/s";
+            SpeedFormatted = string.Format(CultureInfo.InvariantCulture, "{0:F1} MB/s", update.SpeedMbPerSecond);
             BytesFormatted = $"{SizeFormatter.FromBytes(update.BytesReceived)} / {SizeFormatter.FromBytes(update.TotalBytes)}";
         }
 

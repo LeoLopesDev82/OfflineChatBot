@@ -1,5 +1,7 @@
 # 🤖 OfflineChatBot
 
+[![build](https://github.com/LeoLopesDev82/OfflineChatBot/actions/workflows/ci.yml/badge.svg)](https://github.com/LeoLopesDev82/OfflineChatBot/actions/workflows/ci.yml)
+
 A desktop AI chat application built with C# and WPF to demonstrate local inference capabilities using the **Qwen 2.5** model family. The project runs entirely offline without relying on external cloud APIs, ensuring data privacy and local execution.
 
 The core objective of this repository is to showcase software engineering practices, including MVVM architecture, asynchronous programming, thread safety, and integration with C++ bindings for local AI execution via [LLamaSharp](https://github.com/SciSharp/LLamaSharp).
@@ -13,6 +15,22 @@ The core objective of this repository is to showcase software engineering practi
 * **MVVM Pattern:** Strict separation of UI logic and business rules using `CommunityToolkit.Mvvm`.
 * **Resource Management:** Safe handling of unmanaged C++ memory handles (llama.cpp) during model loading, unloading, and deletion.
 * **WPF UI:** Features real-time Markdown rendering, syntax highlighting for code blocks, and live CPU/RAM usage indicators.
+
+## 🧱 Project Structure
+
+The solution is split so that everything except the presentation layer is free of any UI framework dependency:
+
+| Project | Target | Responsibility |
+| --- | --- | --- |
+| `OfflineChatBot.Core` | `net9.0` | Models, service abstractions, local inference, prompt building, model catalog and downloads. No WPF reference. |
+| `OfflineChatBot` | `net9.0-windows` | WPF views, view models, behaviors, converters and the platform services that implement the Core abstractions. Composition root lives in `App.xaml.cs`. |
+| `OfflineChatBot.Tests` | `net9.0-windows` | xUnit suite covering the parsing, prompt assembly, download state and view model orchestration, using hand written test doubles. |
+
+Run the suite with:
+
+```bash
+dotnet test
+```
 
 ## 🚀 Getting Started
 

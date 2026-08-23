@@ -1,20 +1,60 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36804.6 d17.14
+VisualStudioVersion = 17.14.36804.6
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OfflineChatBot", "OfflineChatBot\OfflineChatBot.csproj", "{09EE37C0-574F-4168-9FFE-001304D6B6A4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OfflineChatBot.Core", "OfflineChatBot.Core\OfflineChatBot.Core.csproj", "{67E6F5AD-641D-4DED-AC00-59F0B0867E7D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OfflineChatBot.Tests", "OfflineChatBot.Tests\OfflineChatBot.Tests.csproj", "{187E8E9A-42D5-4393-8341-50B654E976C1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
 		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{09EE37C0-574F-4168-9FFE-001304D6B6A4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{09EE37C0-574F-4168-9FFE-001304D6B6A4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{09EE37C0-574F-4168-9FFE-001304D6B6A4}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{09EE37C0-574F-4168-9FFE-001304D6B6A4}.Debug|x64.Build.0 = Debug|Any CPU
+		{09EE37C0-574F-4168-9FFE-001304D6B6A4}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{09EE37C0-574F-4168-9FFE-001304D6B6A4}.Debug|x86.Build.0 = Debug|Any CPU
 		{09EE37C0-574F-4168-9FFE-001304D6B6A4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{09EE37C0-574F-4168-9FFE-001304D6B6A4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{09EE37C0-574F-4168-9FFE-001304D6B6A4}.Release|x64.ActiveCfg = Release|Any CPU
+		{09EE37C0-574F-4168-9FFE-001304D6B6A4}.Release|x64.Build.0 = Release|Any CPU
+		{09EE37C0-574F-4168-9FFE-001304D6B6A4}.Release|x86.ActiveCfg = Release|Any CPU
+		{09EE37C0-574F-4168-9FFE-001304D6B6A4}.Release|x86.Build.0 = Release|Any CPU
+		{67E6F5AD-641D-4DED-AC00-59F0B0867E7D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{67E6F5AD-641D-4DED-AC00-59F0B0867E7D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{67E6F5AD-641D-4DED-AC00-59F0B0867E7D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{67E6F5AD-641D-4DED-AC00-59F0B0867E7D}.Debug|x64.Build.0 = Debug|Any CPU
+		{67E6F5AD-641D-4DED-AC00-59F0B0867E7D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{67E6F5AD-641D-4DED-AC00-59F0B0867E7D}.Debug|x86.Build.0 = Debug|Any CPU
+		{67E6F5AD-641D-4DED-AC00-59F0B0867E7D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{67E6F5AD-641D-4DED-AC00-59F0B0867E7D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{67E6F5AD-641D-4DED-AC00-59F0B0867E7D}.Release|x64.ActiveCfg = Release|Any CPU
+		{67E6F5AD-641D-4DED-AC00-59F0B0867E7D}.Release|x64.Build.0 = Release|Any CPU
+		{67E6F5AD-641D-4DED-AC00-59F0B0867E7D}.Release|x86.ActiveCfg = Release|Any CPU
+		{67E6F5AD-641D-4DED-AC00-59F0B0867E7D}.Release|x86.Build.0 = Release|Any CPU
+		{187E8E9A-42D5-4393-8341-50B654E976C1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{187E8E9A-42D5-4393-8341-50B654E976C1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{187E8E9A-42D5-4393-8341-50B654E976C1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{187E8E9A-42D5-4393-8341-50B654E976C1}.Debug|x64.Build.0 = Debug|Any CPU
+		{187E8E9A-42D5-4393-8341-50B654E976C1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{187E8E9A-42D5-4393-8341-50B654E976C1}.Debug|x86.Build.0 = Debug|Any CPU
+		{187E8E9A-42D5-4393-8341-50B654E976C1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{187E8E9A-42D5-4393-8341-50B654E976C1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{187E8E9A-42D5-4393-8341-50B654E976C1}.Release|x64.ActiveCfg = Release|Any CPU
+		{187E8E9A-42D5-4393-8341-50B654E976C1}.Release|x64.Build.0 = Release|Any CPU
+		{187E8E9A-42D5-4393-8341-50B654E976C1}.Release|x86.ActiveCfg = Release|Any CPU
+		{187E8E9A-42D5-4393-8341-50B654E976C1}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,21 +1,67 @@
 using System.Collections.ObjectModel;
+using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace OfflineChatBot.Models
 {
     public partial class ChatSession : ObservableObject
     {
-        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public const string DefaultTitle = "New Chat";
+
+        private const int TitleMaxLength = 30;
 
         [ObservableProperty]
-        private string _title = "New Chat";
+        private string _title = DefaultTitle;
 
         [ObservableProperty]
-        [System.Text.Json.Serialization.JsonIgnore]
+        [property: JsonIgnore]
         private bool _isEditing;
 
+        public string Id { get; set; } = Guid.NewGuid().ToString();
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
         public ObservableCollection<ChatMessage> Messages { get; set; } = new ObservableCollection<ChatMessage>();
+
+        [JsonIgnore]
+        public bool HasDefaultTitle => Messages.Count == 0 || Title == DefaultTitle;
+
+        public void RenameFromPrompt(string prompt)
+        {
+            if (!HasDefaultTitle)
+                return;
+
+            Title = prompt.Length > TitleMaxLength ? prompt.Substring(0, TitleMaxLength) + "..." : prompt;
+        }
+
+        public ChatMessage AddUserMessage(string content, string? imagePath)
+        {
+            return AddMessage(new ChatMessage
+            {
+                Sender = MessageSender.User,
+                Content = content,
+                AttachedImagePath = imagePath
+            });
+        }
+
+        public ChatMessage AddStreamingAssistantMessage()
+        {
+            return AddMessage(new ChatMessage
+            {
+                Sender = MessageSender.Assistant,
+                Content = string.Empty,
+                IsStreaming = true
+            });
+        }
+
+        #region Private Methods
+
+        private ChatMessage AddMessage(ChatMessage message)
+        {
+            Messages.Add(message);
+
+            return message;
+        }
+
+        #endregion
     }
 }

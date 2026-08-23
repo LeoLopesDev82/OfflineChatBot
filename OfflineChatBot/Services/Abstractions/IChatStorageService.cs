@@ -1,6 +1,6 @@
 using OfflineChatBot.Models;
 
-namespace OfflineChatBot.Services
+namespace OfflineChatBot.Services.Abstractions
 {
     public interface IChatStorageService
     {

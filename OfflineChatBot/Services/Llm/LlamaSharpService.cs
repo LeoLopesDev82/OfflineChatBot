@@ -1,0 +1,235 @@
+using System.IO;
+using System.Runtime.CompilerServices;
+using LLama;
+using LLama.Abstractions;
+using LLama.Common;
+using LLama.Native;
+using LLama.Sampling;
+using OfflineChatBot.Models;
+using OfflineChatBot.Services.Abstractions;
+
+namespace OfflineChatBot.Services.Llm
+{
+    public sealed class LlamaSharpService : ILlmService, IDisposable
+    {
+        private const int ContextSize = 8192;
+        private const int MaxTokens = 2048;
+
+        private static readonly string[] AssistantPrefixes = { "Bot:", "Help:", "Assistant:" };
+
+        private readonly SemaphoreSlim _loadLock = new SemaphoreSlim(1, 1);
+
+        private LLamaWeights? _weights;
+        private MtmdWeights? _visionWeights;
+        private ModelParams? _parameters;
+        private ILLamaExecutor? _executor;
+        private LLamaContext? _context;
+        private string _mediaMarker = string.Empty;
+
+        public bool IsLoaded => _weights != null && _executor != null;
+        public string LoadedModelPath { get; private set; } = string.Empty;
+
+        public async Task LoadModelAsync(string modelPath, string? visionProjectionPath = null, CancellationToken cancellationToken = default)
+        {
+            EnsureFileExists(modelPath, ".gguf model file not found.");
+
+            if (IsModelReady(modelPath))
+                return;
+
+            await _loadLock.WaitAsync(cancellationToken);
+
+            try
+            {
+                if (IsModelReady(modelPath))
+                    return;
+
+                UnloadInternal();
+
+                await Task.Run(() => LoadWeights(modelPath, visionProjectionPath), cancellationToken);
+
+                LoadedModelPath = modelPath;
+            }
+            finally
+            {
+                _loadLock.Release();
+            }
+        }
+
+        public async Task UnloadModelAsync()
+        {
+            await _loadLock.WaitAsync();
+
+            try
+            {
+                UnloadInternal();
+            }
+            finally
+            {
+                _loadLock.Release();
+            }
+        }
+
+        public async IAsyncEnumerable<string> GenerateResponseStreamAsync(
+            IEnumerable<ChatMessage> history,
+            string userPrompt,
+            string? imagePath = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var executor = await GetLoadedExecutorAsync(cancellationToken);
+
+            ResetVisionState(executor);
+
+            var prompt = ChatMlPromptBuilder.Build(history, AttachImage(executor, userPrompt, imagePath));
+            var isFirstChunk = true;
+
+            await foreach (var chunk in executor.InferAsync(prompt, CreateInferenceParams(), cancellationToken))
+            {
+                var text = isFirstChunk ? TrimAssistantPrefix(chunk) : chunk;
+
+                isFirstChunk = false;
+
+                var cleanedText = ChatMlPromptBuilder.RemoveStopTokens(text);
+
+                if (string.IsNullOrEmpty(cleanedText))
+                    continue;
+
+                yield return cleanedText;
+            }
+        }
+
+        public void Dispose()
+        {
+            UnloadInternal();
+
+            _loadLock.Dispose();
+        }
+
+        #region Private Methods
+
+        private bool IsModelReady(string modelPath)
+        {
+            return IsLoaded && LoadedModelPath == modelPath;
+        }
+
+        private void LoadWeights(string modelPath, string? visionProjectionPath)
+        {
+            _parameters = new ModelParams(modelPath)
+            {
+                ContextSize = ContextSize,
+                GpuLayerCount = 0
+            };
+
+            _weights = LLamaWeights.LoadFromFile(_parameters);
+
+            _executor = string.IsNullOrEmpty(visionProjectionPath)
+                ? new StatelessExecutor(_weights, _parameters)
+                : CreateVisionExecutor(visionProjectionPath);
+        }
+
+        private ILLamaExecutor CreateVisionExecutor(string visionProjectionPath)
+        {
+            EnsureFileExists(visionProjectionPath, "Vision projection file not found.");
+
+            var visionParameters = MtmdContextParams.Default();
+
+            visionParameters.UseGpu = false;
+
+            _visionWeights = MtmdWeights.LoadFromFile(visionProjectionPath, _weights!, visionParameters);
+            _mediaMarker = visionParameters.MediaMarker ?? NativeApi.MtmdDefaultMarker() ?? string.Empty;
+            _context = _weights!.CreateContext(_parameters!);
+
+            return new InteractiveExecutor(_context, _visionWeights);
+        }
+
+        private async Task<ILLamaExecutor> GetLoadedExecutorAsync(CancellationToken cancellationToken)
+        {
+            await _loadLock.WaitAsync(cancellationToken);
+
+            try
+            {
+                return _executor ?? throw new InvalidOperationException("No model is loaded into memory.");
+            }
+            finally
+            {
+                _loadLock.Release();
+            }
+        }
+
+        private void ResetVisionState(ILLamaExecutor executor)
+        {
+            if (executor is not InteractiveExecutor interactiveExecutor)
+                return;
+
+            _context?.NativeHandle.MemoryClear();
+
+            foreach (var embed in interactiveExecutor.Embeds)
+                embed.Dispose();
+
+            interactiveExecutor.Embeds.Clear();
+
+            _visionWeights?.ClearMedia();
+        }
+
+        private string AttachImage(ILLamaExecutor executor, string userPrompt, string? imagePath)
+        {
+            if (string.IsNullOrEmpty(imagePath) || _visionWeights == null)
+                return userPrompt;
+
+            if (executor is not InteractiveExecutor visionExecutor || string.IsNullOrEmpty(_mediaMarker))
+                throw new InvalidOperationException("The selected vision model is not ready to process images.");
+
+            visionExecutor.Embeds.Add(_visionWeights.LoadMedia(imagePath));
+
+            return $"{_mediaMarker}\n{userPrompt}";
+        }
+
+        private static InferenceParams CreateInferenceParams()
+        {
+            return new InferenceParams
+            {
+                MaxTokens = MaxTokens,
+                AntiPrompts = ChatMlPromptBuilder.StopTokens.ToList(),
+                SamplingPipeline = new DefaultSamplingPipeline
+                {
+                    Temperature = 0.7f,
+                    RepeatPenalty = 1.18f,
+                    TopK = 40,
+                    TopP = 0.95f
+                }
+            };
+        }
+
+        private static string TrimAssistantPrefix(string text)
+        {
+            var prefix = AssistantPrefixes.FirstOrDefault(text.StartsWith);
+
+            return prefix == null ? text : text.Substring(prefix.Length).TrimStart();
+        }
+
+        private static void EnsureFileExists(string filePath, string errorMessage)
+        {
+            if (!File.Exists(filePath))
+                throw new FileNotFoundException(errorMessage, filePath);
+        }
+
+        private void UnloadInternal()
+        {
+            _executor = null;
+            _parameters = null;
+
+            _context?.Dispose();
+            _context = null;
+
+            _visionWeights?.Dispose();
+            _visionWeights = null;
+
+            _weights?.Dispose();
+            _weights = null;
+
+            LoadedModelPath = string.Empty;
+            _mediaMarker = string.Empty;
+        }
+
+        #endregion
+    }
+}

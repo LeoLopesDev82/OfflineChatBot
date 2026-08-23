@@ -1,15 +1,23 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 
 namespace OfflineChatBot.Views
 {
     public partial class CodeBlockControl : UserControl
     {
+        private static readonly TimeSpan CopiedFeedbackDuration = TimeSpan.FromSeconds(2);
+
         public static readonly DependencyProperty CodeLanguageProperty =
             DependencyProperty.Register(nameof(CodeLanguage), typeof(string), typeof(CodeBlockControl), new PropertyMetadata("code"));
 
         public static readonly DependencyProperty CodeProperty =
             DependencyProperty.Register(nameof(Code), typeof(string), typeof(CodeBlockControl), new PropertyMetadata(string.Empty));
+
+        public CodeBlockControl()
+        {
+            InitializeComponent();
+        }
 
         public string CodeLanguage
         {
@@ -23,43 +31,42 @@ namespace OfflineChatBot.Views
             set => SetValue(CodeProperty, value);
         }
 
-        public CodeBlockControl()
-        {
-            InitializeComponent();
-        }
-
         #region Event Handlers
 
         private void CopyButton_Click(object sender, RoutedEventArgs e)
         {
-            if (!string.IsNullOrEmpty(Code))
-            {
-                Clipboard.SetText(Code);
-                
-                if (sender is Button btn)
-                {
-                    var originalText = btn.Content;
-        
-                    btn.Content = "Copied!";
-                    
-                    var timer = new System.Windows.Threading.DispatcherTimer
-                    {
-                        Interval = System.TimeSpan.FromSeconds(2)
-                    };
-                    
-                    timer.Tick += (s, args) =>
-                    {
-                        btn.Content = originalText;
- 
-                        timer.Stop();
-                    };
-                    
-                    timer.Start();
-                }
-            }
+            if (string.IsNullOrEmpty(Code))
+                return;
+
+            Clipboard.SetText(Code);
+
+            ShowCopiedFeedback(sender as Button);
         }
 
         #endregion
 
+        #region Private Methods
+
+        private static void ShowCopiedFeedback(Button? button)
+        {
+            if (button == null)
+                return;
+
+            var originalContent = button.Content;
+            var timer = new DispatcherTimer { Interval = CopiedFeedbackDuration };
+
+            button.Content = "Copied!";
+
+            timer.Tick += (_, _) =>
+            {
+                button.Content = originalContent;
+
+                timer.Stop();
+            };
+
+            timer.Start();
+        }
+
+        #endregion
     }
 }

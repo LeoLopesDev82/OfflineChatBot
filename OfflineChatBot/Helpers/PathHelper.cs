@@ -27,7 +27,7 @@ namespace OfflineChatBot.Helpers
 
                 if (!Directory.Exists(folder))
                     Directory.CreateDirectory(folder);
-                
+
                 return folder;
             }
         }

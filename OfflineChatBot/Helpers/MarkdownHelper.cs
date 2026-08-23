@@ -1,4 +1,3 @@
-using System;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
@@ -81,9 +80,9 @@ namespace OfflineChatBot.Helpers
                 FontWeight = FontWeights.Bold,
                 Foreground = (Brush)Application.Current.Resources["AccentBrush"]
             };
-            
+
             ParseInlineFormattedText(headerText, headerSpan);
-            
+
             textBlock.Inlines.Add(headerSpan);
         }
 
@@ -96,9 +95,9 @@ namespace OfflineChatBot.Helpers
         {
             var listText = "  •  " + line.Substring(2).Trim();
             var listSpan = new Span();
-            
+
             ParseInlineFormattedText(listText, listSpan);
-            
+
             textBlock.Inlines.Add(listSpan);
         }
 
@@ -110,18 +109,18 @@ namespace OfflineChatBot.Helpers
         private static void ProcessNumberedListLine(string line, TextBlock textBlock)
         {
             var listSpan = new Span();
-            
+
             ParseInlineFormattedText("  " + line.Trim(), listSpan);
-            
+
             textBlock.Inlines.Add(listSpan);
         }
 
         private static void ProcessRegularLine(string line, TextBlock textBlock)
         {
             var lineSpan = new Span();
-            
+
             ParseInlineFormattedText(line, lineSpan);
-            
+
             textBlock.Inlines.Add(lineSpan);
         }
 
@@ -164,7 +163,7 @@ namespace OfflineChatBot.Helpers
                 Padding = new Thickness(5, 1, 5, 1),
                 Margin = new Thickness(2, 0, 2, 0)
             };
-            
+
             var txt = new TextBlock
             {
                 Text = codeContent,
@@ -173,9 +172,9 @@ namespace OfflineChatBot.Helpers
                 FontSize = 12,
                 FontWeight = FontWeights.SemiBold
             };
-            
+
             border.Child = txt;
-            
+
             targetSpan.Inlines.Add(new InlineUIContainer(border) { BaselineAlignment = BaselineAlignment.Center });
         }
 
@@ -187,7 +186,7 @@ namespace OfflineChatBot.Helpers
         private static void ProcessBoldText(string part, Span targetSpan, Brush textPrimaryBrush)
         {
             var boldContent = part.Substring(2, part.Length - 4);
-            
+
             targetSpan.Inlines.Add(new Run(boldContent)
             {
                 FontWeight = FontWeights.Bold,
@@ -203,7 +202,7 @@ namespace OfflineChatBot.Helpers
         private static void ProcessItalicText(string part, Span targetSpan, Brush textPrimaryBrush)
         {
             var italicContent = part.Substring(1, part.Length - 2);
-            
+
             targetSpan.Inlines.Add(new Run(italicContent)
             {
                 FontStyle = FontStyles.Italic,

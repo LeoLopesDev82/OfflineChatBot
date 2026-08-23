@@ -1,42 +1,39 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using OfflineChatBot.Helpers;
 
 namespace OfflineChatBot.Models
 {
     public partial class ModelInfo : ObservableObject
     {
-        public string Name { get; set; } = string.Empty;
-        public string FileName { get; set; } = string.Empty;
-        public string FilePath { get; set; } = string.Empty;
-        public double SizeInMB { get; set; }
-        public string DownloadUrl { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-
         [ObservableProperty]
         private bool _isDownloaded;
 
         [ObservableProperty]
-        private bool _isDownloading;
+        [NotifyPropertyChangedFor(nameof(SizeFormatted))]
+        private double _sizeInMB;
 
-        [ObservableProperty]
-        private double _downloadProgress;
+        public string Name { get; set; } = string.Empty;
+        public string FileName { get; set; } = string.Empty;
+        public string FilePath { get; set; } = string.Empty;
+        public string DownloadUrl { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
 
-        [ObservableProperty]
-        private string _speedFormatted = "0 MB/s";
+        public string MmprojFileName { get; set; } = string.Empty;
+        public string MmprojFilePath { get; set; } = string.Empty;
+        public string MmprojDownloadUrl { get; set; } = string.Empty;
 
-        [ObservableProperty]
-        private string _downloadedBytesFormatted = "0 MB";
+        public ModelDownloadState Download { get; } = new ModelDownloadState();
 
-        public CancellationTokenSource? DownloadCts { get; set; }
+        public bool IsVisionModel => !string.IsNullOrEmpty(MmprojDownloadUrl);
+        public bool IsDownloadable => !string.IsNullOrWhiteSpace(DownloadUrl);
 
-        public string SizeFormatted
+        public string SizeFormatted => SizeFormatter.FromMegabytes(SizeInMB);
+
+        public string? VisionProjectionPath => IsVisionModel ? MmprojFilePath : null;
+
+        public bool IsSameFileAs(ModelInfo? other)
         {
-            get
-            {
-                if (SizeInMB >= 1024)
-                    return $"{SizeInMB / 1024.0:F2} GB";
-
-                return $"{SizeInMB:F0} MB";
-            }
+            return other != null && FileName.Equals(other.FileName, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

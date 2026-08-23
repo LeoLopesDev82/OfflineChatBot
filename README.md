@@ -7,11 +7,12 @@ The core objective of this repository is to showcase software engineering practi
 ## 🛠️ Technical Highlights
 
 * **Local Inference Engine:** Executes `.gguf` quantized models locally.
+* **Vision Support:** Runs multimodal models (LLaVA 1.5 7B) to interpret images attached to the chat, handling the multimodal projection weights and per-turn media state.
 * **Integrated Model Manager:** Includes an asynchronous download manager to fetch HuggingFace models directly from the UI, with proper stream handling and progress reporting.
-* **Clean Architecture:** Built heavily upon SOLID principles and Single Responsibility. 
+* **Clean Architecture:** Built heavily upon SOLID principles and Single Responsibility, with services behind interfaces and a dependency injection composition root.
 * **MVVM Pattern:** Strict separation of UI logic and business rules using `CommunityToolkit.Mvvm`.
 * **Resource Management:** Safe handling of unmanaged C++ memory handles (llama.cpp) during model loading, unloading, and deletion.
-* **WPF UI:** Features real-time Markdown rendering and syntax highlighting for code blocks.
+* **WPF UI:** Features real-time Markdown rendering, syntax highlighting for code blocks, and live CPU/RAM usage indicators.
 
 ## 🚀 Getting Started
 
@@ -27,12 +28,14 @@ The core objective of this repository is to showcase software engineering practi
 2. Open the solution in Visual Studio.
 3. Build and Run the project.
 4. On the first launch, open the **Model Manager** to download a Qwen 2.5 model (e.g., 0.5B or 1.5B) to begin chatting.
+5. To analyze images, download **LLaVA 1.5 7B (Vision & Chat)** in the Model Manager, select it as the active model, and attach an image through the composer.
 
 ## 🗺️ Roadmap & Future Implementation
 
-While the current text-based engine is functional, the architecture was designed to be extended. Upcoming milestones include:
+The architecture was designed to be extended. Delivered and upcoming milestones:
 
-- [ ] **Multimodal & Document Analysis:** Implementing Vision-Language Models (VLMs) and basic RAG (Retrieval-Augmented Generation). The goal is to allow users to drag-and-drop images or text documents into the chat for context-aware interactions.
+- [x] **Vision Models:** Support for Vision-Language Models (VLMs), allowing users to attach images to the chat for context-aware interactions.
+- [ ] **Document Analysis:** Reading text documents into the conversation, evolving into basic RAG (Retrieval-Augmented Generation).
 - [ ] **Hardware Acceleration Options:** Adding explicit UI toggles for CUDA / Vulkan / Metal backends to test inference scaling on dedicated GPUs.
 
 ## ⚙️ Technology Stack

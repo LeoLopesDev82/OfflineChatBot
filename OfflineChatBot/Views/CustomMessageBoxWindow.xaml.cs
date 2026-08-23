@@ -1,100 +1,75 @@
 using System.Windows;
+using System.Windows.Controls;
 
 namespace OfflineChatBot.Views
 {
     public partial class CustomMessageBoxWindow : Window
     {
-        public MessageBoxResult Result { get; private set; } = MessageBoxResult.None;
-
         public CustomMessageBoxWindow(string messageBoxText, string caption, MessageBoxButton button)
         {
             InitializeComponent();
-            
+
             MessageText.Text = messageBoxText;
             TitleText.Text = caption;
 
-            switch (button)
-            {
-                case MessageBoxButton.OK:
-                    BtnOk.Visibility = Visibility.Visible;
- 
-                    BtnOk.Focus();
-                    
-                    break;
-                case MessageBoxButton.OKCancel:
-                    BtnOk.Visibility = Visibility.Visible;                    
-                    BtnCancel.Visibility = Visibility.Visible;
-                    
-                    BtnOk.Focus();
-                    
-                    break;
-                case MessageBoxButton.YesNo:
-                    BtnYes.Visibility = Visibility.Visible;                    
-                    BtnNo.Visibility = Visibility.Visible;
-                    
-                    BtnYes.Focus();
-                    
-                    break;
-                case MessageBoxButton.YesNoCancel:
-                    BtnYes.Visibility = Visibility.Visible;
-                    BtnNo.Visibility = Visibility.Visible;
-                    BtnCancel.Visibility = Visibility.Visible;
-
-                    BtnYes.Focus();
-                    
-                    break;
-            }
+            ShowButtons(button);
         }
+
+        public MessageBoxResult Result { get; private set; } = MessageBoxResult.None;
 
         public static MessageBoxResult Show(string messageBoxText, string caption, MessageBoxButton button, Window? owner = null)
         {
-            var msgBox = new CustomMessageBoxWindow(messageBoxText, caption, button);
-            
-            if (owner != null)
+            var messageBox = new CustomMessageBoxWindow(messageBoxText, caption, button)
             {
-                msgBox.Owner = owner;
-            }
-            else if (Application.Current.MainWindow != null && Application.Current.MainWindow.IsLoaded)
-            {
-                msgBox.Owner = Application.Current.MainWindow;
-            }
-            
-            msgBox.ShowDialog();
+                Owner = owner ?? ActiveOwner()
+            };
 
-            return msgBox.Result;
+            messageBox.ShowDialog();
+
+            return messageBox.Result;
         }
 
         #region Event Handlers
 
-        private void BtnOk_Click(object sender, RoutedEventArgs e)
+        private void ResultButton_Click(object sender, RoutedEventArgs e)
         {
-            Result = MessageBoxResult.OK;
-            
-            Close();
-        }
+            Result = Enum.Parse<MessageBoxResult>((string)((Button)sender).Tag);
 
-        private void BtnCancel_Click(object sender, RoutedEventArgs e)
-        {
-            Result = MessageBoxResult.Cancel;
-            
-            Close();
-        }
-
-        private void BtnYes_Click(object sender, RoutedEventArgs e)
-        {
-            Result = MessageBoxResult.Yes;
-            
-            Close();
-        }
-
-        private void BtnNo_Click(object sender, RoutedEventArgs e)
-        {
-            Result = MessageBoxResult.No;
-            
             Close();
         }
 
         #endregion
 
+        #region Private Methods
+
+        private static Window? ActiveOwner()
+        {
+            var mainWindow = Application.Current.MainWindow;
+
+            return mainWindow?.IsLoaded == true ? mainWindow : null;
+        }
+
+        private void ShowButtons(MessageBoxButton button)
+        {
+            var buttons = ButtonsFor(button);
+
+            foreach (var visibleButton in buttons)
+                visibleButton.Visibility = Visibility.Visible;
+
+            buttons.First().Focus();
+        }
+
+        private Button[] ButtonsFor(MessageBoxButton button)
+        {
+            return button switch
+            {
+                MessageBoxButton.OKCancel => new[] { BtnOk, BtnCancel },
+                MessageBoxButton.YesNo => new[] { BtnYes, BtnNo },
+                MessageBoxButton.YesNoCancel => new[] { BtnYes, BtnNo, BtnCancel },
+                _ => new[] { BtnOk }
+            };
+        }
+
+        #endregion
     }
 }

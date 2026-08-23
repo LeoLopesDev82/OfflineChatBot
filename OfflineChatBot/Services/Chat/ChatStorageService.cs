@@ -2,8 +2,9 @@ using System.IO;
 using System.Text.Json;
 using OfflineChatBot.Helpers;
 using OfflineChatBot.Models;
+using OfflineChatBot.Services.Abstractions;
 
-namespace OfflineChatBot.Services
+namespace OfflineChatBot.Services.Chat
 {
     public class ChatStorageService : IChatStorageService
     {
@@ -36,7 +37,7 @@ namespace OfflineChatBot.Services
         {
             var filePath = PathHelper.HistoryFilePath;
             var json = JsonSerializer.Serialize(sessions, _jsonOptions);
-            
+
             await File.WriteAllTextAsync(filePath, json);
         }
     }

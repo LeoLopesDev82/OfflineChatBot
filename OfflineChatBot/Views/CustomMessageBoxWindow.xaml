@@ -31,11 +31,11 @@
             
             <!-- Footer (Buttons) -->
             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="15,10,15,15">
-                <Button x:Name="BtnYes" Content="Yes" Style="{StaticResource PrimaryButtonStyle}" Width="80" Margin="0,0,10,0" Click="BtnYes_Click" Visibility="Collapsed"/>
-                <Button x:Name="BtnNo" Content="No" Style="{StaticResource SecondaryButtonStyle}" Width="80" Click="BtnNo_Click" Visibility="Collapsed"/>
+                <Button x:Name="BtnYes" Content="Yes" Tag="Yes" Style="{StaticResource PrimaryButtonStyle}" Width="80" Margin="0,0,10,0" Click="ResultButton_Click" Visibility="Collapsed"/>
+                <Button x:Name="BtnNo" Content="No" Tag="No" Style="{StaticResource SecondaryButtonStyle}" Width="80" Click="ResultButton_Click" Visibility="Collapsed"/>
                 
-                <Button x:Name="BtnOk" Content="OK" Style="{StaticResource PrimaryButtonStyle}" Width="80" Click="BtnOk_Click" Visibility="Collapsed"/>
-                <Button x:Name="BtnCancel" Content="Cancel" Style="{StaticResource SecondaryButtonStyle}" Width="80" Margin="10,0,0,0" Click="BtnCancel_Click" Visibility="Collapsed"/>
+                <Button x:Name="BtnOk" Content="OK" Tag="OK" Style="{StaticResource PrimaryButtonStyle}" Width="80" Click="ResultButton_Click" Visibility="Collapsed"/>
+                <Button x:Name="BtnCancel" Content="Cancel" Tag="Cancel" Style="{StaticResource SecondaryButtonStyle}" Width="80" Margin="10,0,0,0" Click="ResultButton_Click" Visibility="Collapsed"/>
             </StackPanel>
         </Grid>
     </Border>

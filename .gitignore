@@ -35,8 +35,6 @@ bld/
 
 # AI Models (CRITICAL: Do not upload multi-gigabyte files to GitHub)
 *.gguf
-Models/
-models/
 
 # Database files
 *.sqlite

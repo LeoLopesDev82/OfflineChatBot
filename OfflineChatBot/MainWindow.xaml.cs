@@ -1,257 +1,100 @@
-using System.Collections.Specialized;
-using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
+using OfflineChatBot.Helpers;
 using OfflineChatBot.Models;
 using OfflineChatBot.ViewModels;
+using OfflineChatBot.Views;
 
 namespace OfflineChatBot
 {
-    public partial class MainWindow : Window
+    public partial class MainWindow : ChromelessWindow
     {
         public MainViewModel ViewModel { get; }
 
-        public MainWindow()
+        public MainWindow(MainViewModel viewModel)
         {
             InitializeComponent();
 
-            ViewModel = new MainViewModel();
-            DataContext = ViewModel;
+            ViewModel = viewModel;
+            DataContext = viewModel;
 
-            Loaded += MainWindow_Loaded;
+            Loaded += OnLoaded;
         }
 
         #region Event Handlers
 
-        private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
-        {
-            if (ShouldIgnoreClickForEditMode(e.OriginalSource as DependencyObject))
-                return;
-
-            CloseAllEditModesAndSave();
-        }
-
-        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             await ViewModel.InitializeAsync();
-
-            ViewModel.PropertyChanged += ViewModel_PropertyChanged;
-
-            SubscribeToCurrentSession();
-            ScrollToBottom();
         }
 
-        private void BtnMinimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
-        
-        private void BtnMaximize_Click(object sender, RoutedEventArgs e)
+        private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
         {
-            if (WindowState == WindowState.Maximized)
-                WindowState = WindowState.Normal;
-            else
-                WindowState = WindowState.Maximized;
+            if (!ViewModel.HasOpenRename || IsRenameRelated(e.OriginalSource as DependencyObject))
+                return;
+
+            ViewModel.CommitAllRenamesCommand.Execute(null);
+
+            Keyboard.ClearFocus();
+            FocusManager.SetFocusedElement(this, this);
         }
 
-        private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
-
-        private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        private void AttachmentMenuButton_Click(object sender, RoutedEventArgs e)
         {
-            if (e.PropertyName == nameof(ViewModel.CurrentSession))
-            {
-                SubscribeToCurrentSession();
+            if (sender is not FrameworkElement { ContextMenu: { } attachmentMenu })
+                return;
 
-                Dispatcher.InvokeAsync(ScrollToBottom, DispatcherPriority.Background);
-            }
-        }
-
-        private void Messages_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        {
-            if (e.NewItems != null)
-            {
-                foreach (ChatMessage msg in e.NewItems)
-                {
-                    msg.PropertyChanged -= Msg_PropertyChanged;
-                    msg.PropertyChanged += Msg_PropertyChanged;
-                }
-            }
-
-            Dispatcher.InvokeAsync(ScrollToBottom, DispatcherPriority.Background);
-        }
-
-        private void Msg_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-        {
-            if (e.PropertyName == nameof(ChatMessage.Content) || e.PropertyName == nameof(ChatMessage.IsStreaming))
-            {
-                Dispatcher.InvokeAsync(ScrollToBottom, DispatcherPriority.Background);
-            }
-        }
-
-        private void UserInput_PreviewKeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Enter && !Keyboard.IsKeyDown(Key.LeftShift) && !Keyboard.IsKeyDown(Key.RightShift))
-            {
-                e.Handled = true;
-
-                if (ViewModel.SendMessageCommand.CanExecute(null))
-                {
-                    ViewModel.SendMessageCommand.Execute(null);
-                
-                    ScrollToBottom();
-                }
-            }
-        }
-
-        private void RenameChat_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement element && element.DataContext is ChatSession session)
-            {
-                foreach (var s in ViewModel.Sessions)
-                {
-                    s.IsEditing = false;
-                }
-                
-                session.IsEditing = true;
-            }
+            attachmentMenu.PlacementTarget = (UIElement)sender;
+            attachmentMenu.IsOpen = true;
         }
 
         private void TitleTextBox_Loaded(object sender, RoutedEventArgs e)
         {
-            if (sender is System.Windows.Controls.TextBox textBox && textBox.IsVisible)
+            if (sender is not TextBox { IsVisible: true } textBox)
+                return;
+
+            Dispatcher.InvokeAsync(() =>
             {
-                Dispatcher.InvokeAsync(() => 
-                {
-                    textBox.Focus();
-                    Keyboard.Focus(textBox);
-                    textBox.SelectAll();
-                }, DispatcherPriority.Input);
-            }
+                textBox.Focus();
+                Keyboard.Focus(textBox);
+                textBox.SelectAll();
+            }, DispatcherPriority.Input);
         }
 
         private void TitleTextBox_LostFocus(object sender, RoutedEventArgs e)
         {
-            if (sender is FrameworkElement element && element.DataContext is ChatSession session)
-            {
-                if (session.IsEditing)
-                {
-                    session.IsEditing = false;
-                    
-                    ViewModel.SaveSessionsSilently();
-                }
-            }
+            ViewModel.CommitRenameChatCommand.Execute(SessionOf(sender));
         }
 
         private void TitleTextBox_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Enter || e.Key == Key.Escape)
-            {
-                if (sender is FrameworkElement element && element.DataContext is ChatSession session)
-                {
-                    session.IsEditing = false;
+            if (e.Key != Key.Enter && e.Key != Key.Escape)
+                return;
 
-                    if (e.Key == Key.Enter)
-                    {
-                        ViewModel.SaveSessionsSilently();
-                    }
-                }
-        
-                e.Handled = true;
-                
-                Keyboard.ClearFocus();
-            }
+            ViewModel.CommitRenameChatCommand.Execute(SessionOf(sender));
+
+            e.Handled = true;
+
+            Keyboard.ClearFocus();
         }
 
         #endregion
 
         #region Private Methods
 
-        private void SubscribeToCurrentSession()
+        private static ChatSession? SessionOf(object sender)
         {
-            if (ViewModel.CurrentSession != null)
-            {
-                ViewModel.CurrentSession.Messages.CollectionChanged -= Messages_CollectionChanged;
-                ViewModel.CurrentSession.Messages.CollectionChanged += Messages_CollectionChanged;
-
-                foreach (var msg in ViewModel.CurrentSession.Messages)
-                {
-                    msg.PropertyChanged -= Msg_PropertyChanged;
-                    msg.PropertyChanged += Msg_PropertyChanged;
-                }
-            }
+            return (sender as FrameworkElement)?.DataContext as ChatSession;
         }
 
-        private void ScrollToBottom()
+        private static bool IsRenameRelated(DependencyObject? source)
         {
-            try { ChatScrollViewer.ScrollToEnd(); } catch { }
-        }
+            if (source == null)
+                return false;
 
-        private bool ShouldIgnoreClickForEditMode(DependencyObject? src)
-        {
-            if (src == null) return false;
-
-            var btn = FindParent<System.Windows.Controls.Button>(src);
-            
-            if (btn != null && btn.Name == "BtnRename")
-                return true;
-
-            var textBox = FindParent<System.Windows.Controls.TextBox>(src);
-            
-            if (textBox != null)
-                return true;
-
-            return false;
-        }
-
-        private void CloseAllEditModesAndSave()
-        {
-            bool savedAny = false;
-
-            foreach (var session in ViewModel.Sessions)
-            {
-                if (session.IsEditing)
-                {
-                    session.IsEditing = false;
-            
-                    savedAny = true;
-                }
-            }
-
-            if (savedAny)
-            {
-                ViewModel.SaveSessionsSilently();
-                
-                Keyboard.ClearFocus();
-                FocusManager.SetFocusedElement(this, this);
-            }
-        }
-
-        private static T? FindParent<T>(DependencyObject? child) where T : DependencyObject
-        {
-            DependencyObject? parent = child;
-            
-            while (parent != null)
-            {
-                if (parent is T typed) return typed;
-                
-                DependencyObject? logicalParent = LogicalTreeHelper.GetParent(parent);
-                
-                if (logicalParent != null)
-                {
-                    parent = logicalParent;
-                
-                    continue;
-                }
-                
-                if (parent is System.Windows.Media.Visual || parent is System.Windows.Media.Media3D.Visual3D)
-                {
-                    parent = System.Windows.Media.VisualTreeHelper.GetParent(parent);
-                }
-                else
-                {
-                    break;
-                }
-            }
-            
-            return null;
+            return source.FindParent<TextBox>() != null || source.FindParent<Button>()?.Name == "BtnRename";
         }
 
         #endregion

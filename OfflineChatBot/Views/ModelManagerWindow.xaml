@@ -1,4 +1,4 @@
-<Window x:Class="OfflineChatBot.Views.ModelManagerWindow"
+<local:ChromelessWindow x:Class="OfflineChatBot.Views.ModelManagerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -151,19 +151,19 @@
                                     </StackPanel>
 
                                     <!-- Progress Section when downloading -->
-                                    <StackPanel Margin="0,12,0,0" Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVisConverter}}">
+                                    <StackPanel Margin="0,12,0,0" Visibility="{Binding Download.IsActive, Converter={StaticResource BoolToVisConverter}}">
                                         <Grid Margin="0,0,0,4">
-                                            <TextBlock Text="{Binding DownloadedBytesFormatted}"
+                                            <TextBlock Text="{Binding Download.BytesFormatted}"
                                                        Foreground="{StaticResource TextPrimaryBrush}"
                                                        FontSize="11"/>
-                                            <TextBlock Text="{Binding SpeedFormatted}"
+                                            <TextBlock Text="{Binding Download.SpeedFormatted}"
                                                        Foreground="{StaticResource AccentBrush}"
                                                        FontSize="11"
                                                        FontWeight="Bold"
                                                        HorizontalAlignment="Right"/>
                                         </Grid>
 
-                                        <ProgressBar Value="{Binding DownloadProgress}"
+                                        <ProgressBar Value="{Binding Download.Progress}"
                                                      Maximum="100"
                                                      Height="8"
                                                      Foreground="{StaticResource AccentBrush}"
@@ -188,7 +188,8 @@
                                     </Button>
 
                                     <Button Style="{StaticResource SecondaryButtonStyle}"
-                                            Click="DeleteModel_Click"
+                                            Command="{Binding DataContext.DeleteModelCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}"
                                             Visibility="{Binding IsDownloaded, Converter={StaticResource BoolToVisConverter}}">
                                         <Button.ContentTemplate>
                                             <DataTemplate>
@@ -208,4 +209,4 @@
         </ScrollViewer>
         </Grid>
     </Grid>
-</Window>
+</local:ChromelessWindow>

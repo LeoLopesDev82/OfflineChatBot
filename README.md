@@ -32,6 +32,27 @@ Run the suite with:
 dotnet test
 ```
 
+## 🔧 Configuration and Diagnostics
+
+Inference settings live in `appsettings.json`, so the model behaviour can be tuned without recompiling:
+
+```json
+{
+  "Logging": { "MinimumLevel": "Information" },
+  "Generation": {
+    "ContextSize": 8192,
+    "MaxTokens": 2048,
+    "GpuLayerCount": 0,
+    "Temperature": 0.7,
+    "RepeatPenalty": 1.18,
+    "TopK": 40,
+    "TopP": 0.95
+  }
+}
+```
+
+Logging goes through `Microsoft.Extensions.Logging` with Serilog behind it, so the Core project depends only on the abstraction. Daily rolling files are written to `%AppData%/OfflineChatBot/Logs/`, keeping the last seven days, and unhandled UI exceptions are recorded before the application goes down.
+
 ## 🚀 Getting Started
 
 ### Prerequisites

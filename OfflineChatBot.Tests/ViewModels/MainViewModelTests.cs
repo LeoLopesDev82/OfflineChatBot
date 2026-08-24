@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using OfflineChatBot.Models;
 using OfflineChatBot.Tests.Fakes;
 using OfflineChatBot.ViewModels;
@@ -32,9 +33,11 @@ namespace OfflineChatBot.Tests.ViewModels
             var context = await TestContext.CreateAsync("Answer");
 
             context.ViewModel.UserInput = "First";
+
             await context.ViewModel.SendMessageCommand.ExecuteAsync(null);
 
             context.ViewModel.UserInput = "Second";
+
             await context.ViewModel.SendMessageCommand.ExecuteAsync(null);
 
             Assert.Equal("Second", context.Llm.LastPrompt);
@@ -162,12 +165,32 @@ namespace OfflineChatBot.Tests.ViewModels
             Assert.Equal("Yesterday", context.ViewModel.CurrentSession!.Title);
         }
 
+        [Fact]
+        public async Task SelectModel_WhenLoadingFails_ReportsItOnScreenAndInTheLog()
+        {
+            var context = await TestContext.CreateAsync("Answer");
+
+            context.Llm.LoadFailure = new InvalidOperationException("model file is corrupt");
+            context.Llm.IsLoaded = false;
+
+            await context.Models.SelectModelCommand.ExecuteAsync(context.Models.DownloadedModels[0]);
+
+            Assert.Contains("model file is corrupt", context.ViewModel.Status.Message);
+
+            var logged = Assert.Single(context.ModelsLog.Problems);
+
+            Assert.Equal(LogLevel.Error, logged.Level);
+            Assert.Equal("model file is corrupt", logged.Exception!.Message);
+        }
+
         private sealed class TestContext
         {
             public required MainViewModel ViewModel { get; init; }
+            public required ModelManagerViewModel Models { get; init; }
             public required FakeLlmService Llm { get; init; }
             public required FakeDialogService Dialogs { get; init; }
             public required FakeChatStorageService Storage { get; init; }
+            public required FakeLogger<ModelManagerViewModel> ModelsLog { get; init; }
 
             public static Task<TestContext> CreateAsync(params string[] tokens)
             {
@@ -180,17 +203,21 @@ namespace OfflineChatBot.Tests.ViewModels
                 var dialogs = new FakeDialogService();
                 var storage = new FakeChatStorageService { Stored = storedSessions.ToList() };
                 var status = new AppStatusViewModel(new FakeResourceMonitor());
-                var models = new ModelManagerViewModel(new FakeModelManagerService(), llm, dialogs, status);
-                var viewModel = new MainViewModel(llm, storage, dialogs, new ImmediateUiDispatcher(), models, status);
+                var modelsLog = new FakeLogger<ModelManagerViewModel>();
+                var models = new ModelManagerViewModel(new FakeModelManagerService(), llm, dialogs, status, modelsLog);
+                var viewModel = new MainViewModel(llm, storage, dialogs, new ImmediateUiDispatcher(), new FakeLogger<MainViewModel>(), models, status);
 
                 await viewModel.InitializeAsync();
+                await models.EnsureActiveModelReadyAsync();
 
                 return new TestContext
                 {
                     ViewModel = viewModel,
+                    Models = models,
                     Llm = llm,
                     Dialogs = dialogs,
-                    Storage = storage
+                    Storage = storage,
+                    ModelsLog = modelsLog
                 };
             }
         }

@@ -13,6 +13,7 @@ namespace OfflineChatBot.Tests.Fakes
         }
 
         public bool IsLoaded { get; set; } = true;
+        public Exception? LoadFailure { get; set; }
         public string LoadedModelPath { get; set; } = FakeModelManagerService.ModelPath;
 
         public string? LastPrompt { get; private set; }
@@ -24,6 +25,10 @@ namespace OfflineChatBot.Tests.Fakes
         public Task LoadModelAsync(string modelPath, string? visionProjectionPath = null, CancellationToken cancellationToken = default)
         {
             LoadCount++;
+
+            if (LoadFailure != null)
+                throw LoadFailure;
+
             LoadedModelPath = modelPath;
             IsLoaded = true;
 

@@ -12,19 +12,19 @@ namespace OfflineChatBot.Services.Models
             return File.Exists(filePath) ? new FileInfo(filePath).Length : 0;
         }
 
-        public static async Task DeleteAsync(string filePath)
+        public static async Task<bool> DeleteAsync(string filePath)
         {
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
-                return;
+                return true;
 
             await ReleaseNativeHandlesAsync(FirstRetryDelayMs);
 
             if (TryDelete(filePath))
-                return;
+                return true;
 
             await ReleaseNativeHandlesAsync(SecondRetryDelayMs);
 
-            TryDelete(filePath);
+            return TryDelete(filePath);
         }
 
         public static bool TryDelete(string filePath)

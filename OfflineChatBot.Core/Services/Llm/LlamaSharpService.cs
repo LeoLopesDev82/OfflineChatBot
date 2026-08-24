@@ -1,10 +1,11 @@
-using System.IO;
 using System.Runtime.CompilerServices;
 using LLama;
 using LLama.Abstractions;
 using LLama.Common;
 using LLama.Native;
 using LLama.Sampling;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using OfflineChatBot.Models;
 using OfflineChatBot.Services.Abstractions;
 
@@ -12,11 +13,10 @@ namespace OfflineChatBot.Services.Llm
 {
     public sealed class LlamaSharpService : ILlmService, IDisposable
     {
-        private const int ContextSize = 8192;
-        private const int MaxTokens = 2048;
-
         private static readonly string[] AssistantPrefixes = { "Bot:", "Help:", "Assistant:" };
 
+        private readonly GenerationOptions _options;
+        private readonly ILogger<LlamaSharpService> _logger;
         private readonly SemaphoreSlim _loadLock = new SemaphoreSlim(1, 1);
 
         private LLamaWeights? _weights;
@@ -25,6 +25,12 @@ namespace OfflineChatBot.Services.Llm
         private ILLamaExecutor? _executor;
         private LLamaContext? _context;
         private string _mediaMarker = string.Empty;
+
+        public LlamaSharpService(IOptions<GenerationOptions> options, ILogger<LlamaSharpService> logger)
+        {
+            _options = options.Value;
+            _logger = logger;
+        }
 
         public bool IsLoaded => _weights != null && _executor != null;
         public string LoadedModelPath { get; private set; } = string.Empty;
@@ -48,6 +54,8 @@ namespace OfflineChatBot.Services.Llm
                 await Task.Run(() => LoadWeights(modelPath, visionProjectionPath), cancellationToken);
 
                 LoadedModelPath = modelPath;
+
+                _logger.LogInformation("Loaded model {ModelPath}{VisionSuffix}", modelPath, visionProjectionPath == null ? string.Empty : " with vision support");
             }
             finally
             {
@@ -115,8 +123,8 @@ namespace OfflineChatBot.Services.Llm
         {
             _parameters = new ModelParams(modelPath)
             {
-                ContextSize = ContextSize,
-                GpuLayerCount = 0
+                ContextSize = _options.ContextSize,
+                GpuLayerCount = _options.GpuLayerCount
             };
 
             _weights = LLamaWeights.LoadFromFile(_parameters);
@@ -183,18 +191,18 @@ namespace OfflineChatBot.Services.Llm
             return $"{_mediaMarker}\n{userPrompt}";
         }
 
-        private static InferenceParams CreateInferenceParams()
+        private InferenceParams CreateInferenceParams()
         {
             return new InferenceParams
             {
-                MaxTokens = MaxTokens,
+                MaxTokens = _options.MaxTokens,
                 AntiPrompts = ChatMlPromptBuilder.StopTokens.ToList(),
                 SamplingPipeline = new DefaultSamplingPipeline
                 {
-                    Temperature = 0.7f,
-                    RepeatPenalty = 1.18f,
-                    TopK = 40,
-                    TopP = 0.95f
+                    Temperature = _options.Temperature,
+                    RepeatPenalty = _options.RepeatPenalty,
+                    TopK = _options.TopK,
+                    TopP = _options.TopP
                 }
             };
         }

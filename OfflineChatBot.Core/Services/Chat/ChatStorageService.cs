@@ -1,5 +1,5 @@
-using System.IO;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using OfflineChatBot.Helpers;
 using OfflineChatBot.Models;
 using OfflineChatBot.Services.Abstractions;
@@ -12,6 +12,13 @@ namespace OfflineChatBot.Services.Chat
         {
             WriteIndented = true
         };
+
+        private readonly ILogger<ChatStorageService> _logger;
+
+        public ChatStorageService(ILogger<ChatStorageService> logger)
+        {
+            _logger = logger;
+        }
 
         public async Task<List<ChatSession>> LoadSessionsAsync()
         {
@@ -27,8 +34,10 @@ namespace OfflineChatBot.Services.Chat
 
                 return sessions ?? new List<ChatSession>();
             }
-            catch
+            catch (Exception exception)
             {
+                _logger.LogError(exception, "Could not read the chat history at {FilePath}, starting with no sessions", filePath);
+
                 return new List<ChatSession>();
             }
         }

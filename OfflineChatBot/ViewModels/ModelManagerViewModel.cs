@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using OfflineChatBot.Models;
 using OfflineChatBot.Services.Abstractions;
 
@@ -12,6 +13,7 @@ namespace OfflineChatBot.ViewModels
         private readonly ILlmService _llmService;
         private readonly IDialogService _dialogService;
         private readonly AppStatusViewModel _status;
+        private readonly ILogger<ModelManagerViewModel> _logger;
 
         private Task? _warmupTask;
 
@@ -34,12 +36,14 @@ namespace OfflineChatBot.ViewModels
             IModelManagerService modelManager,
             ILlmService llmService,
             IDialogService dialogService,
-            AppStatusViewModel status)
+            AppStatusViewModel status,
+            ILogger<ModelManagerViewModel> logger)
         {
             _modelManager = modelManager;
             _llmService = llmService;
             _dialogService = dialogService;
             _status = status;
+            _logger = logger;
         }
 
         public async Task InitializeAsync()
@@ -112,6 +116,8 @@ namespace OfflineChatBot.ViewModels
             catch (Exception exception)
             {
                 _status.Message = $"Download error: {exception.Message}";
+
+                _logger.LogError(exception, "Download of {ModelName} failed", model.Name);
             }
             finally
             {
@@ -183,6 +189,8 @@ namespace OfflineChatBot.ViewModels
             catch (Exception exception)
             {
                 _status.Message = $"Error loading model: {exception.Message}";
+
+                _logger.LogError(exception, "Could not load model {ModelName}", model.Name);
             }
         }
 
@@ -195,7 +203,14 @@ namespace OfflineChatBot.ViewModels
 
             _warmupTask = Task.Run(async () =>
             {
-                try { await _llmService.LoadModelAsync(model.FilePath, model.VisionProjectionPath); } catch { }
+                try
+                {
+                    await _llmService.LoadModelAsync(model.FilePath, model.VisionProjectionPath);
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogWarning(exception, "Warm up of {ModelName} failed, it will be loaded on the first message", model.Name);
+                }
             });
         }
 

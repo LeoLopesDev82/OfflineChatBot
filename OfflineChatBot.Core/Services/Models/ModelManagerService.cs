@@ -1,5 +1,6 @@
 using System.IO;
 using System.Net.Http;
+using Microsoft.Extensions.Logging;
 using OfflineChatBot.Helpers;
 using OfflineChatBot.Models;
 using OfflineChatBot.Services.Abstractions;
@@ -10,19 +11,14 @@ namespace OfflineChatBot.Services.Models
     {
         private const double VisionWeightsProgressShare = 0.87;
 
-        private static readonly HttpClient SharedHttpClient = new HttpClient();
-
         private readonly ModelFileDownloader _downloader;
+        private readonly ILogger<ModelManagerService> _logger;
         private readonly List<ModelInfo> _models = ModelCatalog.CreatePresets();
 
-        public ModelManagerService() : this(new ModelFileDownloader(SharedHttpClient))
-        {
-
-        }
-
-        public ModelManagerService(ModelFileDownloader downloader)
+        public ModelManagerService(ModelFileDownloader downloader, ILogger<ModelManagerService> logger)
         {
             _downloader = downloader;
+            _logger = logger;
         }
 
         public Task<List<ModelInfo>> GetAvailableModelsAsync()
@@ -53,14 +49,24 @@ namespace OfflineChatBot.Services.Models
         {
             model.IsDownloaded = false;
 
-            await ModelFileStore.DeleteAsync(model.FilePath);
-            await ModelFileStore.DeleteAsync(model.MmprojFilePath);
+            await DeleteFileAsync(model.FilePath);
+            await DeleteFileAsync(model.MmprojFilePath);
 
             model.FilePath = string.Empty;
             model.MmprojFilePath = string.Empty;
+
+            _logger.LogInformation("Deleted model {ModelName}", model.Name);
         }
 
         #region Private Methods
+
+        private async Task DeleteFileAsync(string filePath)
+        {
+            if (await ModelFileStore.DeleteAsync(filePath))
+                return;
+
+            _logger.LogWarning("Could not delete {FilePath}, the file is probably still in use", filePath);
+        }
 
         private async Task DownloadVisionProjectionAsync(
             ModelInfo model,

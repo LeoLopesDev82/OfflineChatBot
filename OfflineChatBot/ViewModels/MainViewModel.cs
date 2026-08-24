@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using OfflineChatBot.Models;
 using OfflineChatBot.Services.Abstractions;
 
@@ -15,6 +16,7 @@ namespace OfflineChatBot.ViewModels
         private readonly IChatStorageService _chatStorage;
         private readonly IDialogService _dialogService;
         private readonly IUiDispatcher _uiDispatcher;
+        private readonly ILogger<MainViewModel> _logger;
 
         private CancellationTokenSource? _generationCts;
 
@@ -39,6 +41,7 @@ namespace OfflineChatBot.ViewModels
             IChatStorageService chatStorage,
             IDialogService dialogService,
             IUiDispatcher uiDispatcher,
+            ILogger<MainViewModel> logger,
             ModelManagerViewModel models,
             AppStatusViewModel status)
         {
@@ -46,6 +49,7 @@ namespace OfflineChatBot.ViewModels
             _chatStorage = chatStorage;
             _dialogService = dialogService;
             _uiDispatcher = uiDispatcher;
+            _logger = logger;
 
             Models = models;
             Status = status;
@@ -299,7 +303,14 @@ namespace OfflineChatBot.ViewModels
 
             _ = Task.Run(async () =>
             {
-                try { await _chatStorage.SaveSessionsAsync(snapshot); } catch { }
+                try
+                {
+                    await _chatStorage.SaveSessionsAsync(snapshot);
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(exception, "Could not save the chat history");
+                }
             });
         }
 

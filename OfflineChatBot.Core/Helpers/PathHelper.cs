@@ -30,6 +30,19 @@ namespace OfflineChatBot.Helpers
             }
         }
 
+        public static string LogsFolder
+        {
+            get
+            {
+                var folder = Path.Combine(AppDataFolder, "Logs");
+
+                if (!Directory.Exists(folder))
+                    Directory.CreateDirectory(folder);
+
+                return folder;
+            }
+        }
+
         public static string HistoryFilePath => Path.Combine(ChatsFolder, "sessions.json");
     }
 }

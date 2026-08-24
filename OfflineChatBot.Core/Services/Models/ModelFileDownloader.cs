@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using Microsoft.Extensions.Logging;
 using OfflineChatBot.Helpers;
 using OfflineChatBot.Models;
 
@@ -13,10 +14,12 @@ namespace OfflineChatBot.Services.Models
         private const int ReportIntervalMs = 100;
 
         private readonly HttpClient _httpClient;
+        private readonly ILogger<ModelFileDownloader> _logger;
 
-        public ModelFileDownloader(HttpClient httpClient)
+        public ModelFileDownloader(HttpClient httpClient, ILogger<ModelFileDownloader> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task DownloadAsync(
@@ -48,8 +51,10 @@ namespace OfflineChatBot.Services.Models
 
                 return response.IsSuccessStatusCode ? response.Content.Headers.ContentLength : null;
             }
-            catch
+            catch (Exception exception)
             {
+                _logger.LogWarning(exception, "Could not read the published size of {Url}", url);
+
                 return null;
             }
         }

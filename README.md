@@ -9,6 +9,7 @@ The core objective of this repository is to showcase software engineering practi
 ## 🛠️ Technical Highlights
 
 * **Local Inference Engine:** Executes `.gguf` quantized models locally.
+* **Context Budgeting:** Counts real tokens with the model tokenizer and trims the oldest turns to fit the context window, reserving room for the answer instead of guessing with a fixed message count.
 * **Vision Support:** Runs multimodal models (LLaVA 1.5 7B) to interpret images attached to the chat, handling the multimodal projection weights and per-turn media state.
 * **Integrated Model Manager:** Includes an asynchronous download manager to fetch HuggingFace models directly from the UI, with proper stream handling and progress reporting.
 * **Clean Architecture:** Built heavily upon SOLID principles and Single Responsibility, with services behind interfaces and a dependency injection composition root.
@@ -42,6 +43,7 @@ Inference settings live in `appsettings.json`, so the model behaviour can be tun
   "Generation": {
     "ContextSize": 8192,
     "MaxTokens": 2048,
+    "MaxHistoryTokens": 2048,
     "GpuLayerCount": 0,
     "Temperature": 0.7,
     "RepeatPenalty": 1.18,

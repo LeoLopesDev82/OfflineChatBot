@@ -1,5 +1,6 @@
 using OfflineChatBot.Models;
 using OfflineChatBot.Services.Llm;
+using OfflineChatBot.Tests.Fakes;
 using Xunit;
 
 namespace OfflineChatBot.Tests.Services
@@ -46,17 +47,70 @@ namespace OfflineChatBot.Tests.Services
         }
 
         [Fact]
-        public void Build_LongHistory_KeepsOnlyTheLastTenMessages()
+        public void Build_WhenEverythingFits_KeepsTheWholeHistory()
         {
-            var history = Enumerable.Range(1, 14)
-                .Select(index => new ChatMessage { Sender = MessageSender.User, Content = $"Message {index}" })
-                .ToList();
+            var history = CreateHistory(6);
 
-            var prompt = BuildNormalized(history, "Now");
+            var result = CreateBuilder(contextSize: 8192).Build(history, "Now");
 
-            Assert.DoesNotContain("Message 4", prompt);
-            Assert.Contains("Message 5", prompt);
-            Assert.Contains("Message 14", prompt);
+            Assert.Equal(6, result.IncludedMessages);
+            Assert.Equal(0, result.DroppedMessages);
+        }
+
+        [Fact]
+        public void Build_WhenHistoryExceedsTheBudget_DropsTheOldestMessagesFirst()
+        {
+            var history = CreateHistory(40);
+
+            var result = CreateBuilder(contextSize: 700, maxTokens: 100).Build(history, "Now");
+
+            Assert.True(result.DroppedMessages > 0);
+            Assert.Equal(40, result.IncludedMessages + result.DroppedMessages);
+            Assert.DoesNotContain("Message 1 ", result.Text);
+            Assert.Contains("Message 40 ", result.Text);
+        }
+
+        [Fact]
+        public void Build_ReservesRoomForTheAnswer()
+        {
+            var history = CreateHistory(40);
+
+            var generous = CreateBuilder(contextSize: 2000, maxTokens: 100).Build(history, "Now");
+            var reserved = CreateBuilder(contextSize: 2000, maxTokens: 1500).Build(history, "Now");
+
+            Assert.True(reserved.IncludedMessages < generous.IncludedMessages);
+        }
+
+        [Fact]
+        public void Build_WhenNothingFits_KeepsOnlyTheCurrentQuestion()
+        {
+            var history = CreateHistory(10);
+
+            var result = CreateBuilder(contextSize: 200, maxTokens: 100).Build(history, "Now");
+
+            Assert.Equal(0, result.IncludedMessages);
+            Assert.Equal(10, result.DroppedMessages);
+            Assert.Contains("Now", result.Text);
+        }
+
+        [Fact]
+        public void Build_ReportsHowManyTokensThePromptUses()
+        {
+            var result = CreateBuilder(contextSize: 8192).Build([], "Now");
+
+            Assert.Equal(result.Text.Length / 4, result.TokenCount);
+        }
+
+        [Fact]
+        public void Build_HonoursTheConfiguredHistoryCeiling()
+        {
+            var history = CreateHistory(40);
+
+            var uncapped = CreateBuilder(contextSize: 8192).Build(history, "Now");
+            var capped = CreateBuilder(contextSize: 8192, maxHistoryTokens: 200).Build(history, "Now");
+
+            Assert.True(capped.IncludedMessages < uncapped.IncludedMessages);
+            Assert.True(capped.IncludedMessages > 0);
         }
 
         [Fact]
@@ -67,9 +121,32 @@ namespace OfflineChatBot.Tests.Services
             Assert.Equal("abc", cleaned);
         }
 
+        private static ChatMlPromptBuilder CreateBuilder(uint contextSize, int maxTokens = 2048, int maxHistoryTokens = int.MaxValue)
+        {
+            var options = new GenerationOptions
+            {
+                ContextSize = contextSize,
+                MaxTokens = maxTokens,
+                MaxHistoryTokens = maxHistoryTokens
+            };
+
+            return new ChatMlPromptBuilder(new FakeTokenCounter(), options);
+        }
+
+        private static List<ChatMessage> CreateHistory(int count)
+        {
+            return Enumerable.Range(1, count)
+                .Select(index => new ChatMessage
+                {
+                    Sender = index % 2 == 1 ? MessageSender.User : MessageSender.Assistant,
+                    Content = $"Message {index} with enough words to take up a measurable amount of space"
+                })
+                .ToList();
+        }
+
         private static string BuildNormalized(IEnumerable<ChatMessage> history, string userPrompt)
         {
-            return ChatMlPromptBuilder.Build(history, userPrompt).ReplaceLineEndings("\n");
+            return CreateBuilder(contextSize: 8192).Build(history, userPrompt).Text.ReplaceLineEndings("\n");
         }
     }
 }

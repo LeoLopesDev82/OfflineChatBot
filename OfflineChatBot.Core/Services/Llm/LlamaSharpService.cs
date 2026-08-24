@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text;
 using LLama;
 using LLama.Abstractions;
 using LLama.Common;
@@ -11,12 +12,13 @@ using OfflineChatBot.Services.Abstractions;
 
 namespace OfflineChatBot.Services.Llm
 {
-    public sealed class LlamaSharpService : ILlmService, IDisposable
+    public sealed class LlamaSharpService : ILlmService, ITokenCounter, IDisposable
     {
         private static readonly string[] AssistantPrefixes = { "Bot:", "Help:", "Assistant:" };
 
         private readonly GenerationOptions _options;
         private readonly ILogger<LlamaSharpService> _logger;
+        private readonly ChatMlPromptBuilder _promptBuilder;
         private readonly SemaphoreSlim _loadLock = new SemaphoreSlim(1, 1);
 
         private LLamaWeights? _weights;
@@ -30,6 +32,17 @@ namespace OfflineChatBot.Services.Llm
         {
             _options = options.Value;
             _logger = logger;
+            _promptBuilder = new ChatMlPromptBuilder(this, _options);
+        }
+
+        public int Count(string text)
+        {
+            var weights = _weights;
+
+            if (weights == null)
+                return EstimateTokens(text);
+
+            return weights.Tokenize(text, add_bos: false, special: true, encoding: Encoding.UTF8).Length;
         }
 
         public bool IsLoaded => _weights != null && _executor != null;
@@ -87,7 +100,7 @@ namespace OfflineChatBot.Services.Llm
 
             ResetVisionState(executor);
 
-            var prompt = ChatMlPromptBuilder.Build(history, AttachImage(executor, userPrompt, imagePath));
+            var prompt = BuildPrompt(history, AttachImage(executor, userPrompt, imagePath));
             var isFirstChunk = true;
 
             await foreach (var chunk in executor.InferAsync(prompt, CreateInferenceParams(), cancellationToken))
@@ -117,6 +130,25 @@ namespace OfflineChatBot.Services.Llm
         private bool IsModelReady(string modelPath)
         {
             return IsLoaded && LoadedModelPath == modelPath;
+        }
+
+        private string BuildPrompt(IEnumerable<ChatMessage> history, string userPrompt)
+        {
+            var result = _promptBuilder.Build(history, userPrompt);
+
+            _logger.LogInformation(
+                "Prompt uses {TokenCount} of {ContextSize} tokens, keeping {IncludedMessages} history messages and dropping {DroppedMessages}",
+                result.TokenCount,
+                _options.ContextSize,
+                result.IncludedMessages,
+                result.DroppedMessages);
+
+            return result.Text;
+        }
+
+        private static int EstimateTokens(string text)
+        {
+            return text.Length / 4;
         }
 
         private void LoadWeights(string modelPath, string? visionProjectionPath)

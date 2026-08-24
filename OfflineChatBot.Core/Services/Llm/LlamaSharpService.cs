@@ -101,21 +101,25 @@ namespace OfflineChatBot.Services.Llm
             ResetVisionState(executor);
 
             var prompt = BuildPrompt(history, AttachImage(executor, userPrompt, imagePath));
+            var filter = new StopTokenFilter();
             var isFirstChunk = true;
 
             await foreach (var chunk in executor.InferAsync(prompt, CreateInferenceParams(), cancellationToken))
             {
-                var text = isFirstChunk ? TrimAssistantPrefix(chunk) : chunk;
+                var text = filter.Take(isFirstChunk ? TrimAssistantPrefix(chunk) : chunk);
 
                 isFirstChunk = false;
 
-                var cleanedText = ChatMlPromptBuilder.RemoveStopTokens(text);
-
-                if (string.IsNullOrEmpty(cleanedText))
+                if (string.IsNullOrEmpty(text))
                     continue;
 
-                yield return cleanedText;
+                yield return text;
             }
+
+            var remainingText = filter.Flush();
+
+            if (!string.IsNullOrEmpty(remainingText))
+                yield return remainingText;
         }
 
         public void Dispose()

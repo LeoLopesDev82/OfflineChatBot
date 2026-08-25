@@ -11,7 +11,7 @@ namespace OfflineChatBot.Tests.Fakes
         {
             Started = true;
 
-            onSample(new ResourceUsage("CPU: 10%", "RAM: 100 MB"));
+            onSample(new ResourceUsage("CPU: 10%", "RAM: 100 MB", "GPU: 0% · 0 MB"));
         }
 
         public void Stop()

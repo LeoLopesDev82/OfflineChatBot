@@ -7,6 +7,10 @@ namespace OfflineChatBot.Services.Abstractions
         bool IsLoaded { get; }
         string LoadedModelPath { get; }
 
+        bool UseGpu { get; set; }
+        BackendStatus Backend { get; }
+        double LastTokensPerSecond { get; }
+
         Task LoadModelAsync(string modelPath, string? visionProjectionPath = null, CancellationToken cancellationToken = default);
         Task UnloadModelAsync();
 

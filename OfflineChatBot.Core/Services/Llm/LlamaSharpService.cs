@@ -33,6 +33,8 @@ namespace OfflineChatBot.Services.Llm
             _options = options.Value;
             _logger = logger;
             _promptBuilder = new ChatMlPromptBuilder(this, _options);
+
+            UseGpu = _options.UseGpu;
         }
 
         public int Count(string text)
@@ -47,6 +49,10 @@ namespace OfflineChatBot.Services.Llm
 
         public bool IsLoaded => _weights != null && _executor != null;
         public string LoadedModelPath { get; private set; } = string.Empty;
+
+        public bool UseGpu { get; set; }
+        public BackendStatus Backend { get; private set; } = BackendStatus.Cpu;
+        public double LastTokensPerSecond { get; private set; }
 
         public async Task LoadModelAsync(string modelPath, string? visionProjectionPath = null, CancellationToken cancellationToken = default)
         {
@@ -64,11 +70,21 @@ namespace OfflineChatBot.Services.Llm
 
                 UnloadInternal();
 
+                NativeBackend.BeginLoad();
+
                 await Task.Run(() => LoadWeights(modelPath, visionProjectionPath), cancellationToken);
 
                 LoadedModelPath = modelPath;
+                Backend = NativeBackend.Current;
 
-                _logger.LogInformation("Loaded model {ModelPath}{VisionSuffix}", modelPath, visionProjectionPath == null ? string.Empty : " with vision support");
+                _logger.LogInformation(
+                    "Loaded model {ModelPath} on {Device} with {OffloadedLayers}/{TotalLayers} layers offloaded using {VideoMemory:F0} MiB{VisionSuffix}",
+                    modelPath,
+                    Backend.Device,
+                    Backend.OffloadedLayers,
+                    Backend.TotalLayers,
+                    Backend.VideoMemoryInMB,
+                    visionProjectionPath == null ? string.Empty : " with vision support");
             }
             finally
             {
@@ -102,13 +118,18 @@ namespace OfflineChatBot.Services.Llm
 
             var prompt = BuildPrompt(history, AttachImage(executor, userPrompt, imagePath));
             var filter = new StopTokenFilter();
+            var throughput = new ThroughputMeter();
             var isFirstChunk = true;
 
             await foreach (var chunk in executor.InferAsync(prompt, CreateInferenceParams(), cancellationToken))
             {
+                throughput.Count();
+
                 var text = filter.Take(isFirstChunk ? TrimAssistantPrefix(chunk) : chunk);
 
                 isFirstChunk = false;
+
+                LastTokensPerSecond = throughput.TokensPerSecond;
 
                 if (string.IsNullOrEmpty(text))
                     continue;
@@ -117,6 +138,10 @@ namespace OfflineChatBot.Services.Llm
             }
 
             var remainingText = filter.Flush();
+
+            LastTokensPerSecond = throughput.TokensPerSecond;
+
+            _logger.LogInformation("Generated {TokenCount} tokens at {TokensPerSecond:F1} tokens per second", throughput.TokenCount, LastTokensPerSecond);
 
             if (!string.IsNullOrEmpty(remainingText))
                 yield return remainingText;
@@ -157,10 +182,25 @@ namespace OfflineChatBot.Services.Llm
 
         private void LoadWeights(string modelPath, string? visionProjectionPath)
         {
+            try
+            {
+                LoadWeights(modelPath, visionProjectionPath, RequestedGpuLayers);
+            }
+            catch (Exception exception) when (RequestedGpuLayers > 0)
+            {
+                _logger.LogWarning(exception, "Loading {ModelPath} on the GPU failed, falling back to the CPU", modelPath);
+
+                UnloadInternal();
+                LoadWeights(modelPath, visionProjectionPath, 0);
+            }
+        }
+
+        private void LoadWeights(string modelPath, string? visionProjectionPath, int gpuLayers)
+        {
             _parameters = new ModelParams(modelPath)
             {
                 ContextSize = _options.ContextSize,
-                GpuLayerCount = _options.GpuLayerCount
+                GpuLayerCount = gpuLayers
             };
 
             _weights = LLamaWeights.LoadFromFile(_parameters);
@@ -169,6 +209,8 @@ namespace OfflineChatBot.Services.Llm
                 ? new StatelessExecutor(_weights, _parameters)
                 : CreateVisionExecutor(visionProjectionPath);
         }
+
+        private int RequestedGpuLayers => UseGpu ? _options.GpuLayerCount : 0;
 
         private ILLamaExecutor CreateVisionExecutor(string visionProjectionPath)
         {

@@ -1,4 +1,4 @@
 namespace OfflineChatBot.Models
 {
-    public readonly record struct ResourceUsage(string Cpu, string Memory);
+    public readonly record struct ResourceUsage(string Cpu, string Memory, string Gpu);
 }

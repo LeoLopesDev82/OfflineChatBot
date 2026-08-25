@@ -377,9 +377,31 @@
                                 BorderThickness="1"
                                 CornerRadius="10"
                                 Padding="10,5"
+                                Margin="0,0,8,0">
+                            <TextBlock Text="{Binding Status.Gpu}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"/>
+                        </Border>
+                        <Border Background="{StaticResource BgCardBrush}"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="10,5"
+                                Margin="0,0,8,0">
+                            <TextBlock Text="{Binding Status.Throughput}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"/>
+                        </Border>
+                        <Border Background="{StaticResource BgCardBrush}"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="10,5"
                                 Margin="0,0,10,0">
                             <TextBlock Text="{Binding Status.Backend}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       Foreground="{StaticResource AccentBrush}"
                                        FontSize="11"
                                        FontWeight="SemiBold"/>
                         </Border>

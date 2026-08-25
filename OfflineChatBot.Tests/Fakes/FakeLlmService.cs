@@ -13,6 +13,9 @@ namespace OfflineChatBot.Tests.Fakes
         }
 
         public bool IsLoaded { get; set; } = true;
+        public bool UseGpu { get; set; }
+        public BackendStatus Backend { get; set; } = BackendStatus.Cpu;
+        public double LastTokensPerSecond { get; set; }
         public Exception? LoadFailure { get; set; }
         public string LoadedModelPath { get; set; } = FakeModelManagerService.ModelPath;
 

@@ -10,6 +10,8 @@ namespace OfflineChatBot.Services.Platform
     {
         private static readonly TimeSpan SampleInterval = TimeSpan.FromSeconds(1);
 
+        private readonly GpuCounters _gpuCounters = new GpuCounters();
+
         private DispatcherTimer? _timer;
         private TimeSpan _previousCpuTime;
         private DateTime _previousSampleAt;
@@ -31,6 +33,8 @@ namespace OfflineChatBot.Services.Platform
             _timer?.Stop();
 
             _timer = null;
+
+            _gpuCounters.Dispose();
         }
 
         #region Private Methods
@@ -42,7 +46,18 @@ namespace OfflineChatBot.Services.Platform
             var cpu = FormatCpu(process);
             var memory = $"RAM: {SizeFormatter.FromBytes(process.WorkingSet64)}";
 
-            return new ResourceUsage(cpu, memory);
+            return new ResourceUsage(cpu, memory, FormatGpu());
+        }
+
+        private string FormatGpu()
+        {
+            if (!_gpuCounters.IsAvailable)
+                return "GPU: --";
+
+            var utilization = _gpuCounters.UtilizationPercentage;
+            var memory = _gpuCounters.DedicatedMemoryInMB;
+
+            return $"GPU: {utilization:F0}% · {SizeFormatter.FromMegabytes(memory)}";
         }
 
         private string FormatCpu(Process process)

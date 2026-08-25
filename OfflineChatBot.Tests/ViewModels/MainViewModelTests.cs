@@ -202,7 +202,7 @@ namespace OfflineChatBot.Tests.ViewModels
                 var llm = new FakeLlmService(tokens);
                 var dialogs = new FakeDialogService();
                 var storage = new FakeChatStorageService { Stored = storedSessions.ToList() };
-                var status = new AppStatusViewModel(new FakeResourceMonitor());
+                var status = new AppStatusViewModel(new FakeResourceMonitor(), llm);
                 var modelsLog = new FakeLogger<ModelManagerViewModel>();
                 var models = new ModelManagerViewModel(new FakeModelManagerService(), llm, dialogs, status, modelsLog);
                 var viewModel = new MainViewModel(llm, storage, dialogs, new ImmediateUiDispatcher(), new FakeLogger<MainViewModel>(), models, status);

@@ -31,14 +31,15 @@ namespace OfflineChatBot
             var configuration = BuildConfiguration();
 
             ConfigureSerilog(configuration);
+            ConfigureNativeBackend(configuration);
 
             DispatcherUnhandledException += OnDispatcherUnhandledException;
 
             _services = BuildServiceProvider(configuration);
-
             _services.GetRequiredService<ILogger<App>>().LogInformation("Application started");
 
             MainWindow = _services.GetRequiredService<MainWindow>();
+
             MainWindow.Show();
         }
 
@@ -62,6 +63,13 @@ namespace OfflineChatBot
         #endregion
 
         #region Private Methods
+
+        private static void ConfigureNativeBackend(IConfiguration configuration)
+        {
+            var useGpu = configuration.GetValue($"{GenerationOptions.SectionName}:UseGpu", true);
+
+            NativeBackend.Configure(useGpu, message => Log.Debug("llama: {Message}", message.TrimEnd()));
+        }
 
         private static IConfiguration BuildConfiguration()
         {

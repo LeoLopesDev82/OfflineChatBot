@@ -32,6 +32,9 @@ namespace OfflineChatBot.ViewModels
         [ObservableProperty]
         private double _downloadProgress;
 
+        [ObservableProperty]
+        private bool _useGpu;
+
         public ModelManagerViewModel(
             IModelManagerService modelManager,
             ILlmService llmService,
@@ -44,7 +47,13 @@ namespace OfflineChatBot.ViewModels
             _dialogService = dialogService;
             _status = status;
             _logger = logger;
+
+            _useGpu = llmService.UseGpu;
         }
+
+        public string BackendDescription => _llmService.Backend.UsesGpu
+            ? $"Running on {_llmService.Backend.Device}"
+            : "Running on the CPU";
 
         public async Task InitializeAsync()
         {
@@ -174,7 +183,28 @@ namespace OfflineChatBot.ViewModels
                 : $"Model {model.Name} deleted. Selected {SelectedModel.Name}.";
         }
 
+        partial void OnUseGpuChanged(bool value)
+        {
+            _ = ApplyGpuPreferenceAsync(value);
+        }
+
         #region Private Methods
+
+        private async Task ApplyGpuPreferenceAsync(bool useGpu)
+        {
+            _llmService.UseGpu = useGpu;
+
+            _logger.LogInformation("GPU acceleration set to {UseGpu}", useGpu);
+
+            await _llmService.UnloadModelAsync();
+
+            if (SelectedModel == null)
+                return;
+
+            await LoadModelAsync(SelectedModel);
+
+            OnPropertyChanged(nameof(BackendDescription));
+        }
 
         private async Task LoadModelAsync(ModelInfo model)
         {

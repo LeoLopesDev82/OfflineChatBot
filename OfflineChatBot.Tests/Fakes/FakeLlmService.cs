@@ -21,6 +21,7 @@ namespace OfflineChatBot.Tests.Fakes
 
         public string? LastPrompt { get; private set; }
         public string? LastImagePath { get; private set; }
+        public string LastDocumentContext { get; private set; } = string.Empty;
         public List<ChatMessage> LastHistory { get; private set; } = new List<ChatMessage>();
         public int LoadCount { get; private set; }
         public int UnloadCount { get; private set; }
@@ -50,11 +51,13 @@ namespace OfflineChatBot.Tests.Fakes
             IEnumerable<ChatMessage> history,
             string userPrompt,
             string? imagePath = null,
+            string documentContext = "",
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             LastHistory = history.ToList();
             LastPrompt = userPrompt;
             LastImagePath = imagePath;
+            LastDocumentContext = documentContext;
 
             foreach (var token in _tokens)
             {

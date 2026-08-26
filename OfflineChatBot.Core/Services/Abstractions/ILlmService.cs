@@ -18,6 +18,7 @@ namespace OfflineChatBot.Services.Abstractions
             IEnumerable<ChatMessage> history,
             string userPrompt,
             string? imagePath = null,
+            string documentContext = "",
             CancellationToken cancellationToken = default);
     }
 }

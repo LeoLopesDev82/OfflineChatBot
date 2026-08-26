@@ -18,6 +18,10 @@ namespace OfflineChatBot.Models
         [NotifyPropertyChangedFor(nameof(HasImage))]
         private string? _attachedImagePath;
 
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(HasDocument))]
+        private string? _attachedDocumentName;
+
         public string Id { get; set; } = Guid.NewGuid().ToString();
         public MessageSender Sender { get; set; }
         public DateTime Timestamp { get; set; } = DateTime.Now;
@@ -33,6 +37,9 @@ namespace OfflineChatBot.Models
 
         [JsonIgnore]
         public bool HasImage => !string.IsNullOrEmpty(AttachedImagePath);
+
+        [JsonIgnore]
+        public bool HasDocument => !string.IsNullOrEmpty(AttachedDocumentName);
 
         [JsonIgnore]
         public bool IsThinking => IsAssistant && IsStreaming && string.IsNullOrWhiteSpace(Content);

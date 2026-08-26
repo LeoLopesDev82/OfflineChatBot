@@ -55,8 +55,18 @@ namespace OfflineChatBot.Services.Models
                     DownloadUrl = "https://huggingface.co/second-state/Llava-v1.5-7B-GGUF/resolve/main/llava-v1.5-7b-Q4_K_M.gguf",
                     MmprojFileName = "llava-v1.5-7b-mmproj-model-f16.gguf",
                     MmprojDownloadUrl = "https://huggingface.co/second-state/Llava-v1.5-7B-GGUF/resolve/main/llava-v1.5-7b-mmproj-model-f16.gguf",
+                    Kind = ModelKind.Vision,
                     SizeInMB = 4700,
                     Description = "Vision model capable of interpreting images. Supports uploading images into the chat."
+                },
+                new ModelInfo
+                {
+                    Name = "EmbeddingGemma 300M (Document Search)",
+                    FileName = "embeddinggemma-300M-Q8_0.gguf",
+                    DownloadUrl = "https://huggingface.co/ggml-org/embeddinggemma-300M-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf",
+                    SizeInMB = 319,
+                    Kind = ModelKind.Embedding,
+                    Description = "Required to attach documents. It does not chat: it turns text into vectors so the assistant can find the relevant passages of a PDF, Word or text file."
                 }
             };
         }

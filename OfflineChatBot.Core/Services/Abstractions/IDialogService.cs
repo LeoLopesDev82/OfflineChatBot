@@ -5,6 +5,7 @@ namespace OfflineChatBot.Services.Abstractions
         void ShowInformation(string message, string caption);
         bool Confirm(string message, string caption);
         string? PickImageFile();
+        string? PickDocumentFile();
         void ShowModelManager();
     }
 }

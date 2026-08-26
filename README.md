@@ -10,6 +10,7 @@ The core objective of this repository is to showcase software engineering practi
 
 * **Local Inference Engine:** Executes `.gguf` quantized models locally.
 * **GPU Acceleration:** Offloads model layers to the GPU through the Vulkan backend, falling back to the CPU automatically when no compatible device is available or when the model does not fit in video memory.
+* **Document Question Answering:** Reads PDF, Word and text files, splits them into passages, turns each one into a vector with a dedicated embedding model and retrieves only the passages that match the question, so a document far larger than the context window can still be discussed.
 * **Context Budgeting:** Counts real tokens with the model tokenizer and trims the oldest turns to fit the context window, reserving room for the answer instead of guessing with a fixed message count.
 * **Vision Support:** Runs multimodal models (LLaVA 1.5 7B) to interpret images attached to the chat, handling the multimodal projection weights and per-turn media state.
 * **Integrated Model Manager:** Includes an asynchronous download manager to fetch HuggingFace models directly from the UI, with proper stream handling and progress reporting.
@@ -71,6 +72,20 @@ The status bar reports live GPU utilization and dedicated video memory, read fro
 
 Logging goes through `Microsoft.Extensions.Logging` with Serilog behind it, so the Core project depends only on the abstraction. Daily rolling files are written to `%AppData%/OfflineChatBot/Logs/`, keeping the last seven days, and unhandled UI exceptions are recorded before the application goes down.
 
+## 📄 Talking to a Document
+
+Attaching a file does not push the whole document into the prompt, which would never fit. The text is extracted (PdfPig for PDF, OpenXml for Word), split into passages of about three hundred and fifty tokens with a small overlap, and each passage is turned into a vector by a dedicated embedding model. When a question arrives it becomes a vector too, and only the closest passages travel with it to the chat model.
+
+The embedding model is a separate download in the Model Manager and is never selectable as a conversation model: it produces vectors, not answers. Attaching a document is blocked until it is present, and a chat model is still required to write the reply. Vectors are stored next to the conversation and erased with it, so reopening the application does not pay the indexing cost again.
+
+Passage size and model choice were measured rather than assumed, and the measurements did not always point where intuition did. Indexing cost is proportional to the amount of text, not to the number of passages, so larger passages buy no speed at all while they dilute the sentence that answers the question among unrelated paragraphs: the same document indexed at seven hundred tokens per passage lost an answer that three hundred and fifty tokens retrieved correctly. A hundred megabyte embedding model indexed that document in 1.2s against 2.9s for the three hundred megabyte one and scored the same on the retrieval benchmark, yet the answers it produced on real documents were visibly worse, so the larger model stayed. Retrieval benchmarks are a proxy for answer quality, not a substitute for reading the answers.
+
+Indexing is the slow step, and it reports itself. The file appears in the composer the moment it is picked, marked as attaching, and sending stays disabled until the passages are ready, so the wait reads as work in progress rather than as a frozen window.
+
+Retrieval answers questions, it does not summarise. Asking what a clause says works because the answer lives in one passage; asking to summarise an entire book does not, because only a handful of passages ever reach the model. That is a property of the technique rather than a defect, and whole document summarisation needs a hierarchical pass that is not implemented here.
+
+Scanned PDFs have no text layer and are rejected with an explanation, since character recognition is not supported. The legacy binary `.doc` format and spreadsheets are out of scope: tabular data needs aggregation or querying rather than similarity search.
+
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -86,13 +101,15 @@ Logging goes through `Microsoft.Extensions.Logging` with Serilog behind it, so t
 3. Build and Run the project.
 4. On the first launch, open the **Model Manager** to download a Qwen 2.5 model (e.g., 0.5B or 1.5B) to begin chatting.
 5. To analyze images, download **LLaVA 1.5 7B (Vision & Chat)** in the Model Manager, select it as the active model, and attach an image through the composer.
+6. To ask questions about a document, download **EmbeddingGemma 300M (Document Search)** in the Model Manager, then attach a PDF, Word or text file through the composer. It is indexed once and stays available for that conversation.
 
 ## 🗺️ Roadmap & Future Implementation
 
 The architecture was designed to be extended. Delivered and upcoming milestones:
 
 - [x] **Vision Models:** Support for Vision-Language Models (VLMs), allowing users to attach images to the chat for context-aware interactions.
-- [ ] **Document Analysis:** Reading text documents into the conversation, evolving into basic RAG (Retrieval-Augmented Generation).
+- [x] **Document Analysis:** Retrieval augmented generation over PDF, Word and text files, with a local embedding model and persisted vectors.
+- [ ] **Spreadsheet Analysis:** Answering questions over tabular data through aggregation and querying instead of similarity search.
 - [x] **Hardware Acceleration:** GPU offloading through the Vulkan backend, toggleable at runtime, with automatic fallback to the CPU.
 
 ## ⚙️ Technology Stack

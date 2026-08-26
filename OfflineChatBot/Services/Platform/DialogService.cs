@@ -9,6 +9,7 @@ namespace OfflineChatBot.Services.Platform
     public sealed class DialogService : IDialogService
     {
         private const string ImageFilter = "Image Files|*.jpg;*.jpeg;*.png;*.bmp|All Files|*.*";
+        private const string DocumentFilter = "Documents|*.pdf;*.docx;*.txt;*.md;*.csv|All Files|*.*";
 
         private readonly IServiceProvider _serviceProvider;
 
@@ -29,10 +30,17 @@ namespace OfflineChatBot.Services.Platform
 
         public string? PickImageFile()
         {
-            var dialog = new OpenFileDialog
-            {
-                Filter = ImageFilter
-            };
+            return Pick(ImageFilter);
+        }
+
+        public string? PickDocumentFile()
+        {
+            return Pick(DocumentFilter);
+        }
+
+        private static string? Pick(string filter)
+        {
+            var dialog = new OpenFileDialog { Filter = filter };
 
             return dialog.ShowDialog() == true ? dialog.FileName : null;
         }

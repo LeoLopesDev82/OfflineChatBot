@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using System.IO;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using OfflineChatBot.Models;
 using OfflineChatBot.Services.Abstractions;
 
@@ -11,14 +13,19 @@ namespace OfflineChatBot.ViewModels
     {
         private const string NoModelMessage = "[No downloaded model available. Please open Model Manager to download Qwen 2.5.]";
         private const string VisionRequiredMessage = "Image attachments require a vision model. Please select LLaVA 1.5 7B (Vision & Chat) before sending your message.";
+        private const string EmbeddingRequiredMessage = "Reading documents needs the EmbeddingGemma model. Open the Model Manager and download it, then attach the file again. A chat model is still needed to answer.";
 
         private readonly ILlmService _llmService;
         private readonly IChatStorageService _chatStorage;
         private readonly IDialogService _dialogService;
         private readonly IUiDispatcher _uiDispatcher;
         private readonly ILogger<MainViewModel> _logger;
+        private readonly IDocumentIndexService _documents;
+        private readonly IDocumentStore _documentStore;
+        private readonly DocumentOptions _documentOptions;
 
         private CancellationTokenSource? _generationCts;
+        private IndexedDocument? _activeDocument;
 
         [ObservableProperty]
         private ObservableCollection<ChatSession> _sessions = new ObservableCollection<ChatSession>();
@@ -36,12 +43,24 @@ namespace OfflineChatBot.ViewModels
         [NotifyPropertyChangedFor(nameof(HasPendingImage))]
         private string? _pendingImagePath;
 
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(HasPendingDocument))]
+        private string? _pendingDocumentName;
+
+        [ObservableProperty]
+        [NotifyCanExecuteChangedFor(nameof(SendMessageCommand))]
+        [NotifyCanExecuteChangedFor(nameof(AttachDocumentCommand))]
+        private bool _isIndexingDocument;
+
         public MainViewModel(
             ILlmService llmService,
             IChatStorageService chatStorage,
             IDialogService dialogService,
             IUiDispatcher uiDispatcher,
             ILogger<MainViewModel> logger,
+            IDocumentIndexService documents,
+            IDocumentStore documentStore,
+            IOptions<DocumentOptions> documentOptions,
             ModelManagerViewModel models,
             AppStatusViewModel status)
         {
@@ -50,6 +69,9 @@ namespace OfflineChatBot.ViewModels
             _dialogService = dialogService;
             _uiDispatcher = uiDispatcher;
             _logger = logger;
+            _documents = documents;
+            _documentStore = documentStore;
+            _documentOptions = documentOptions.Value;
 
             Models = models;
             Status = status;
@@ -60,7 +82,11 @@ namespace OfflineChatBot.ViewModels
 
         public bool HasPendingImage => !string.IsNullOrEmpty(PendingImagePath);
 
+        public bool HasPendingDocument => !string.IsNullOrEmpty(PendingDocumentName);
+
         public bool HasOpenRename => Sessions.Any(session => session.IsEditing);
+
+
 
         public async Task InitializeAsync()
         {
@@ -96,6 +122,8 @@ namespace OfflineChatBot.ViewModels
                 return;
 
             Sessions.Remove(session);
+
+            _ = _documentStore.DeleteAsync(session.Id);
 
             EnsureCurrentSession(session);
 
@@ -151,7 +179,42 @@ namespace OfflineChatBot.ViewModels
             _dialogService.ShowModelManager();
         }
 
+        [RelayCommand(CanExecute = nameof(IsIdle))]
+        public async Task AttachDocumentAsync()
+        {
+            if (!await Models.EnsureEmbeddingModelReadyAsync())
+            {
+                _dialogService.ShowInformation(EmbeddingRequiredMessage, "Document Search Model Required");
+
+                return;
+            }
+
+            var filePath = _dialogService.PickDocumentFile();
+
+            if (string.IsNullOrEmpty(filePath))
+                return;
+
+            await IndexDocumentAsync(CurrentSession ?? CreateAndSelectSession(), filePath);
+        }
+
         [RelayCommand]
+        public async Task RemoveAttachedDocumentAsync()
+        {
+            var session = CurrentSession;
+
+            if (session?.DocumentName == null)
+                return;
+
+            await _documentStore.DeleteAsync(session.Id);
+
+            session.DocumentName = null;
+            _activeDocument = null;
+            PendingDocumentName = null;
+
+            SaveSessions();
+        }
+
+        [RelayCommand(CanExecute = nameof(IsIdle))]
         public async Task SendMessageAsync()
         {
             if (IsGenerating || string.IsNullOrWhiteSpace(UserInput))
@@ -159,6 +222,7 @@ namespace OfflineChatBot.ViewModels
 
             var prompt = UserInput.Trim();
             var imagePath = PendingImagePath;
+            var documentName = PendingDocumentName;
 
             if (!IsImageSupportedByActiveModel(imagePath))
                 return;
@@ -169,9 +233,12 @@ namespace OfflineChatBot.ViewModels
             var history = session.Messages.ToList();
 
             session.RenameFromPrompt(prompt);
-            session.AddUserMessage(prompt, imagePath);
+            session.AddUserMessage(prompt, imagePath, documentName);
 
-            await GenerateAnswerAsync(session.AddStreamingAssistantMessage(), history, prompt, imagePath);
+            var answer = session.AddStreamingAssistantMessage();
+            var documentContext = await FindDocumentContextAsync(session, prompt);
+
+            await GenerateAnswerAsync(answer, history, prompt, imagePath, documentContext);
         }
 
         [RelayCommand]
@@ -180,7 +247,15 @@ namespace OfflineChatBot.ViewModels
             _generationCts?.Cancel();
         }
 
+        partial void OnCurrentSessionChanged(ChatSession? value)
+        {
+            _activeDocument = null;
+            PendingDocumentName = null;
+        }
+
         #region Private Methods
+
+        private bool IsIdle() => !IsIndexingDocument;
 
         private async Task LoadSessionsAsync()
         {
@@ -198,6 +273,72 @@ namespace OfflineChatBot.ViewModels
             CreateNewChat();
 
             return CurrentSession!;
+        }
+
+        private async Task IndexDocumentAsync(ChatSession session, string filePath)
+        {
+            var fileName = Path.GetFileName(filePath);
+
+            PendingDocumentName = fileName;
+            IsIndexingDocument = true;
+
+            try
+            {
+                var progress = new Progress<double>(percentage => Status.Message = $"Reading {fileName}... {percentage:F0}%");
+
+                _activeDocument = await Task.Run(() => _documents.IndexAsync(filePath, progress));
+
+                await _documentStore.SaveAsync(session.Id, _activeDocument);
+
+                session.DocumentName = _activeDocument.Name;
+                PendingDocumentName = _activeDocument.Name;
+
+                Status.Message = $"{fileName} is ready with {_activeDocument.Chunks.Count} passages indexed.";
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception, "Could not read {FileName}", fileName);
+                _dialogService.ShowInformation(exception.Message, "Could not read the document");
+
+                PendingDocumentName = null;
+                Status.Message = "Ready";
+            }
+            finally
+            {
+                IsIndexingDocument = false;
+
+                SaveSessions();
+            }
+        }
+
+        private async Task<string> FindDocumentContextAsync(ChatSession session, string prompt)
+        {
+            if (session.DocumentName == null)
+                return string.Empty;
+
+            var document = await EnsureDocumentLoadedAsync(session);
+
+            if (document == null)
+                return string.Empty;
+
+            var chunks = await _documents.FindRelevantAsync(document, prompt, _documentOptions.RetrievedChunks);
+
+            _logger.LogInformation("Retrieved {ChunkCount} passages from {DocumentName}", chunks.Count, document.Name);
+
+            return string.Join("\n\n", chunks.Select(chunk => chunk.Text));
+        }
+
+        private async Task<IndexedDocument?> EnsureDocumentLoadedAsync(ChatSession session)
+        {
+            if (_activeDocument != null)
+                return _activeDocument;
+
+            if (!await Models.EnsureEmbeddingModelReadyAsync())
+                return null;
+
+            _activeDocument = await _documentStore.LoadAsync(session.Id);
+
+            return _activeDocument;
         }
 
         private void EnsureCurrentSession(ChatSession removedSession)
@@ -234,10 +375,11 @@ namespace OfflineChatBot.ViewModels
         private void ClearComposer()
         {
             UserInput = string.Empty;
+            PendingDocumentName = null;
             PendingImagePath = null;
         }
 
-        private async Task GenerateAnswerAsync(ChatMessage answer, List<ChatMessage> history, string prompt, string? imagePath)
+        private async Task GenerateAnswerAsync(ChatMessage answer, List<ChatMessage> history, string prompt, string? imagePath, string documentContext)
         {
             IsGenerating = true;
 
@@ -245,7 +387,7 @@ namespace OfflineChatBot.ViewModels
 
             try
             {
-                await RequestAnswerAsync(answer, history, prompt, imagePath);
+                await RequestAnswerAsync(answer, history, prompt, imagePath, documentContext);
             }
             catch (OperationCanceledException)
             {
@@ -265,7 +407,7 @@ namespace OfflineChatBot.ViewModels
             }
         }
 
-        private async Task RequestAnswerAsync(ChatMessage answer, List<ChatMessage> history, string prompt, string? imagePath)
+        private async Task RequestAnswerAsync(ChatMessage answer, List<ChatMessage> history, string prompt, string? imagePath, string documentContext)
         {
             var model = await Models.EnsureActiveModelReadyAsync();
 
@@ -278,7 +420,7 @@ namespace OfflineChatBot.ViewModels
                 return;
             }
 
-            await StreamAnswerAsync(answer, history, prompt, imagePath, _generationCts!.Token);
+            await StreamAnswerAsync(answer, history, prompt, imagePath, documentContext, _generationCts!.Token);
         }
 
         private Task StreamAnswerAsync(
@@ -286,11 +428,12 @@ namespace OfflineChatBot.ViewModels
             List<ChatMessage> history,
             string prompt,
             string? imagePath,
+            string documentContext,
             CancellationToken cancellationToken)
         {
             return Task.Run(async () =>
             {
-                var stream = _llmService.GenerateResponseStreamAsync(history, prompt, imagePath, cancellationToken);
+                var stream = _llmService.GenerateResponseStreamAsync(history, prompt, imagePath, documentContext, cancellationToken);
 
                 await foreach (var token in stream.WithCancellation(cancellationToken))
                     await _uiDispatcher.InvokeAsync(() => answer.Content += token, cancellationToken);

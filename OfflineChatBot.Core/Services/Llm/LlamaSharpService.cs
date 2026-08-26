@@ -110,13 +110,14 @@ namespace OfflineChatBot.Services.Llm
             IEnumerable<ChatMessage> history,
             string userPrompt,
             string? imagePath = null,
+            string documentContext = "",
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var executor = await GetLoadedExecutorAsync(cancellationToken);
 
             ResetVisionState(executor);
 
-            var prompt = BuildPrompt(history, AttachImage(executor, userPrompt, imagePath));
+            var prompt = BuildPrompt(history, AttachImage(executor, userPrompt, imagePath), documentContext);
             var filter = new StopTokenFilter();
             var throughput = new ThroughputMeter();
             var isFirstChunk = true;
@@ -161,9 +162,9 @@ namespace OfflineChatBot.Services.Llm
             return IsLoaded && LoadedModelPath == modelPath;
         }
 
-        private string BuildPrompt(IEnumerable<ChatMessage> history, string userPrompt)
+        private string BuildPrompt(IEnumerable<ChatMessage> history, string userPrompt, string documentContext)
         {
-            var result = _promptBuilder.Build(history, userPrompt);
+            var result = _promptBuilder.Build(history, userPrompt, documentContext);
 
             _logger.LogInformation(
                 "Prompt uses {TokenCount} of {ContextSize} tokens, keeping {IncludedMessages} history messages and dropping {DroppedMessages}",

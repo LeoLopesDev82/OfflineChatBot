@@ -6,6 +6,7 @@ namespace OfflineChatBot.Tests.Fakes
     {
         public bool ConfirmResult { get; set; } = true;
         public string? PickedImage { get; set; }
+        public string? PickedDocument { get; set; }
 
         public List<string> Information { get; } = new List<string>();
         public int ConfirmCount { get; private set; }
@@ -26,6 +27,11 @@ namespace OfflineChatBot.Tests.Fakes
         public string? PickImageFile()
         {
             return PickedImage;
+        }
+
+        public string? PickDocumentFile()
+        {
+            return PickedDocument;
         }
 
         public void ShowModelManager()

@@ -19,6 +19,7 @@ namespace OfflineChatBot.Models
 
         public string Id { get; set; } = Guid.NewGuid().ToString();
         public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public string? DocumentName { get; set; }
 
         public ObservableCollection<ChatMessage> Messages { get; set; } = new ObservableCollection<ChatMessage>();
 
@@ -33,13 +34,14 @@ namespace OfflineChatBot.Models
             Title = prompt.Length > TitleMaxLength ? prompt.Substring(0, TitleMaxLength) + "..." : prompt;
         }
 
-        public ChatMessage AddUserMessage(string content, string? imagePath)
+        public ChatMessage AddUserMessage(string content, string? imagePath, string? documentName)
         {
             return AddMessage(new ChatMessage
             {
                 Sender = MessageSender.User,
                 Content = content,
-                AttachedImagePath = imagePath
+                AttachedImagePath = imagePath,
+                AttachedDocumentName = documentName
             });
         }
 

@@ -420,6 +420,7 @@
                 </Grid>
             </Border>
 
+            <!-- Document attached to this conversation -->
             <!-- Chat Feed ScrollViewer & ItemsControl -->
             <ScrollViewer Grid.Row="1"
                           x:Name="ChatScrollViewer"
@@ -546,6 +547,17 @@
                                             </TextBlock>
                                         </StackPanel>
 
+                                        <!-- Attached Document in Bubble -->
+                                        <Border Visibility="{Binding HasDocument, Converter={StaticResource BoolToVisConverter}}"
+                                                CornerRadius="8" Padding="8,6" Margin="0,0,0,8"
+                                                Background="{StaticResource BgCardBrush}"
+                                                HorizontalAlignment="Left">
+                                            <StackPanel Orientation="Horizontal">
+                                                <iconPacks:PackIconBootstrapIcons Kind="FileEarmarkText" Width="14" Height="14" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                <TextBlock Text="{Binding AttachedDocumentName}" Foreground="{StaticResource TextPrimaryBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+
                                         <!-- Attached Image in Bubble -->
                                         <Image Source="{Binding AttachedImagePath}"
                                                Visibility="{Binding HasImage, Converter={StaticResource BoolToVisConverter}}"
@@ -625,18 +637,52 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- Attached Image Preview -->
-                        <Border Grid.Row="0" Grid.Column="1" Margin="14,10,14,0" 
-                                Visibility="{Binding HasPendingImage, Converter={StaticResource BoolToVisConverter}}" 
-                                HorizontalAlignment="Left" CornerRadius="8" Background="{StaticResource BgCardBrush}" Padding="4">
-                            <StackPanel Orientation="Horizontal">
-                                <Image Source="{Binding PendingImagePath}" MaxHeight="60" MaxWidth="100" Stretch="Uniform" Margin="0,0,8,0"/>
-                                <TextBlock Text="Image attached" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <Button Background="Transparent" BorderThickness="0" Command="{Binding RemoveAttachedImageCommand}" ToolTip="Remove image">
-                                    <iconPacks:PackIconBootstrapIcons Kind="X" Width="16" Height="16" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                </Button>
-                            </StackPanel>
-                        </Border>
+                        <!-- Attachment Previews -->
+                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Margin="14,10,14,0" HorizontalAlignment="Left">
+                            <Border Visibility="{Binding HasPendingImage, Converter={StaticResource BoolToVisConverter}}"
+                                    CornerRadius="8" Background="{StaticResource BgCardBrush}" Padding="4" Margin="0,0,8,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <Image Source="{Binding PendingImagePath}" MaxHeight="60" MaxWidth="100" Stretch="Uniform" Margin="0,0,8,0"/>
+                                    <TextBlock Text="Image attached" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <Button Background="Transparent" BorderThickness="0" Command="{Binding RemoveAttachedImageCommand}" ToolTip="Remove image">
+                                        <iconPacks:PackIconBootstrapIcons Kind="X" Width="16" Height="16" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Visibility="{Binding HasPendingDocument, Converter={StaticResource BoolToVisConverter}}"
+                                    CornerRadius="8" Background="{StaticResource BgCardBrush}" Padding="8,6">
+                                <StackPanel Orientation="Horizontal">
+                                    <iconPacks:PackIconBootstrapIcons Kind="FileEarmarkText" Width="14" Height="14" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Text="{Binding PendingDocumentName}" Foreground="{StaticResource TextPrimaryBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
+
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                                Visibility="{Binding IsIndexingDocument, Converter={StaticResource BoolToVisConverter}}">
+                                        <TextBlock Text="attaching, please wait" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" FontStyle="Italic" VerticalAlignment="Center"/>
+                                        <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" FontStyle="Italic" FontWeight="Bold" Width="18" VerticalAlignment="Center">
+                                            <TextBlock.Triggers>
+                                                <EventTrigger RoutedEvent="Loaded">
+                                                    <BeginStoryboard>
+                                                        <Storyboard RepeatBehavior="Forever">
+                                                            <StringAnimationUsingKeyFrames Storyboard.TargetProperty="Text" Duration="0:0:1.2">
+                                                                <DiscreteStringKeyFrame Value="." KeyTime="0:0:0"/>
+                                                                <DiscreteStringKeyFrame Value=".." KeyTime="0:0:0.4"/>
+                                                                <DiscreteStringKeyFrame Value="..." KeyTime="0:0:0.8"/>
+                                                            </StringAnimationUsingKeyFrames>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </TextBlock.Triggers>
+                                        </TextBlock>
+                                    </StackPanel>
+
+                                    <Button Background="Transparent" BorderThickness="0" Cursor="Hand" Command="{Binding RemoveAttachedDocumentCommand}" ToolTip="Remove document"
+                                            Visibility="{Binding IsIndexingDocument, Converter={StaticResource InvBoolToVisConverter}}">
+                                        <iconPacks:PackIconBootstrapIcons Kind="X" Width="16" Height="16" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
 
                         <Button Grid.Row="1" Grid.Column="0" 
                                 Style="{StaticResource AttachmentButtonStyle}"
@@ -646,11 +692,11 @@
                             <Button.ContextMenu>
                                 <ContextMenu Style="{StaticResource AttachmentMenuStyle}"
                                              DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-                                    <MenuItem Style="{StaticResource AttachmentMenuItemStyle}" IsEnabled="False">
+                                    <MenuItem Style="{StaticResource AttachmentMenuItemStyle}" Command="{Binding AttachDocumentCommand}">
                                         <MenuItem.Header>
                                             <StackPanel Orientation="Horizontal">
                                                 <iconPacks:PackIconBootstrapIcons Kind="Paperclip" Width="16" Height="16" Margin="0,0,10,0"/>
-                                                <TextBlock Text="Attach file" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Attach document" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </MenuItem.Header>
                                     </MenuItem>

@@ -31,9 +31,9 @@ namespace OfflineChatBot.Services.Llm
             return text;
         }
 
-        public PromptResult Build(IEnumerable<ChatMessage> history, string userPrompt)
+        public PromptResult Build(IEnumerable<ChatMessage> history, string userPrompt, string documentContext = "")
         {
-            var opening = FormatTurn("system", SystemPrompt);
+            var opening = FormatTurn("system", SystemPrompt + DocumentBlock(documentContext));
             var closing = FormatTurn("user", userPrompt) + AssistantOpening;
             var candidates = history.Where(message => message.IsUser || message.IsAssistant).ToList();
 
@@ -72,6 +72,14 @@ namespace OfflineChatBot.Services.Llm
             var remaining = (int)_options.ContextSize - reserved;
 
             return Math.Min(remaining, _options.MaxHistoryTokens);
+        }
+
+        private static string DocumentBlock(string documentContext)
+        {
+            if (string.IsNullOrWhiteSpace(documentContext))
+                return string.Empty;
+
+            return $"\n\nExcerpts from the document the user attached:\n---\n{documentContext}\n---\nUse these excerpts when they answer the question, and say so when they do not.";
         }
 
         private static string RoleOf(ChatMessage message)

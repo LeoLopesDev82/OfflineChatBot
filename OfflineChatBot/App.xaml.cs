@@ -9,6 +9,7 @@ using OfflineChatBot.Helpers;
 using OfflineChatBot.Models;
 using OfflineChatBot.Services.Abstractions;
 using OfflineChatBot.Services.Chat;
+using OfflineChatBot.Services.Documents;
 using OfflineChatBot.Services.Llm;
 using OfflineChatBot.Services.Models;
 using OfflineChatBot.Services.Platform;
@@ -106,6 +107,7 @@ namespace OfflineChatBot
 
             services.AddLogging(builder => builder.AddSerilog(dispose: true));
             services.Configure<GenerationOptions>(configuration.GetSection(GenerationOptions.SectionName));
+            services.Configure<DocumentOptions>(configuration.GetSection(DocumentOptions.SectionName));
 
             services.AddSingleton<HttpClient>();
             services.AddSingleton<ModelFileDownloader>();
@@ -113,9 +115,20 @@ namespace OfflineChatBot
             services.AddSingleton<ILlmService, LlamaSharpService>();
             services.AddSingleton<IModelManagerService, ModelManagerService>();
             services.AddSingleton<IChatStorageService, ChatStorageService>();
+            services.AddSingleton<IEmbeddingService, LlamaEmbeddingService>();
+            services.AddSingleton<IDocumentStore, DocumentStore>();
+            services.AddSingleton<TextChunker>();
+            services.AddSingleton<IDocumentTextExtractor>(_ => new CompositeTextExtractor(
+            [
+                new PlainTextExtractor(),
+                new PdfTextExtractor(),
+                new WordTextExtractor()
+            ]));
+            services.AddSingleton<IDocumentIndexService, DocumentIndexService>();
             services.AddSingleton<IDialogService, DialogService>();
             services.AddSingleton<IResourceMonitor, ProcessResourceMonitor>();
             services.AddSingleton<IUiDispatcher, WpfUiDispatcher>();
+            services.AddSingleton<ITokenCounter>(provider => (ITokenCounter)provider.GetRequiredService<ILlmService>());
 
             services.AddSingleton<AppStatusViewModel>();
             services.AddSingleton<ModelManagerViewModel>();

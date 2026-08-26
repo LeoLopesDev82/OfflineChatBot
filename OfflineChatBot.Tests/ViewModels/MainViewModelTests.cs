@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using OfflineChatBot.Models;
 using OfflineChatBot.Tests.Fakes;
 using OfflineChatBot.ViewModels;
@@ -157,7 +158,7 @@ namespace OfflineChatBot.Tests.ViewModels
         {
             var stored = new ChatSession { Title = "Yesterday" };
 
-            stored.AddUserMessage("Old question", null);
+            stored.AddUserMessage("Old question", null, null);
 
             var context = await TestContext.CreateAsync(["Answer"], [stored]);
 
@@ -191,6 +192,8 @@ namespace OfflineChatBot.Tests.ViewModels
             public required FakeDialogService Dialogs { get; init; }
             public required FakeChatStorageService Storage { get; init; }
             public required FakeLogger<ModelManagerViewModel> ModelsLog { get; init; }
+            public required FakeDocumentIndexService Documents { get; init; }
+            public required FakeDocumentStore DocumentStore { get; init; }
 
             public static Task<TestContext> CreateAsync(params string[] tokens)
             {
@@ -204,8 +207,20 @@ namespace OfflineChatBot.Tests.ViewModels
                 var storage = new FakeChatStorageService { Stored = storedSessions.ToList() };
                 var status = new AppStatusViewModel(new FakeResourceMonitor(), llm);
                 var modelsLog = new FakeLogger<ModelManagerViewModel>();
-                var models = new ModelManagerViewModel(new FakeModelManagerService(), llm, dialogs, status, modelsLog);
-                var viewModel = new MainViewModel(llm, storage, dialogs, new ImmediateUiDispatcher(), new FakeLogger<MainViewModel>(), models, status);
+                var documents = new FakeDocumentIndexService();
+                var documentStore = new FakeDocumentStore();
+                var models = new ModelManagerViewModel(new FakeModelManagerService(), llm, dialogs, status, modelsLog, new FakeEmbeddingService());
+                var viewModel = new MainViewModel(
+                    llm,
+                    storage,
+                    dialogs,
+                    new ImmediateUiDispatcher(),
+                    new FakeLogger<MainViewModel>(),
+                    documents,
+                    documentStore,
+                    Options.Create(new DocumentOptions()),
+                    models,
+                    status);
 
                 await viewModel.InitializeAsync();
                 await models.EnsureActiveModelReadyAsync();
@@ -217,7 +232,9 @@ namespace OfflineChatBot.Tests.ViewModels
                     Llm = llm,
                     Dialogs = dialogs,
                     Storage = storage,
-                    ModelsLog = modelsLog
+                    ModelsLog = modelsLog,
+                    Documents = documents,
+                    DocumentStore = documentStore
                 };
             }
         }

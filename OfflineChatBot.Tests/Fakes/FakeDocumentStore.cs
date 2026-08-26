@@ -1,21 +1,20 @@
-using OfflineChatBot.Models;
 using OfflineChatBot.Services.Abstractions;
 
 namespace OfflineChatBot.Tests.Fakes
 {
     public sealed class FakeDocumentStore : IDocumentStore
     {
-        public Dictionary<string, IndexedDocument> Stored { get; } = new Dictionary<string, IndexedDocument>();
+        public Dictionary<string, string> Stored { get; } = new Dictionary<string, string>();
         public List<string> Deleted { get; } = new List<string>();
 
-        public Task SaveAsync(string sessionId, IndexedDocument document)
+        public Task SaveAsync(string sessionId, string text)
         {
-            Stored[sessionId] = document;
+            Stored[sessionId] = text;
 
             return Task.CompletedTask;
         }
 
-        public Task<IndexedDocument?> LoadAsync(string sessionId)
+        public Task<string?> LoadAsync(string sessionId)
         {
             return Task.FromResult(Stored.GetValueOrDefault(sessionId));
         }

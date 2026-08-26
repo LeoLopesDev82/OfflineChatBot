@@ -657,7 +657,7 @@
                                     <TextBlock Text="{Binding PendingDocumentName}" Foreground="{StaticResource TextPrimaryBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
 
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
-                                                Visibility="{Binding IsIndexingDocument, Converter={StaticResource BoolToVisConverter}}">
+                                                Visibility="{Binding IsReadingDocument, Converter={StaticResource BoolToVisConverter}}">
                                         <TextBlock Text="attaching, please wait" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" FontStyle="Italic" VerticalAlignment="Center"/>
                                         <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" FontStyle="Italic" FontWeight="Bold" Width="18" VerticalAlignment="Center">
                                             <TextBlock.Triggers>
@@ -677,7 +677,7 @@
                                     </StackPanel>
 
                                     <Button Background="Transparent" BorderThickness="0" Cursor="Hand" Command="{Binding RemoveAttachedDocumentCommand}" ToolTip="Remove document"
-                                            Visibility="{Binding IsIndexingDocument, Converter={StaticResource InvBoolToVisConverter}}">
+                                            Visibility="{Binding IsReadingDocument, Converter={StaticResource InvBoolToVisConverter}}">
                                         <iconPacks:PackIconBootstrapIcons Kind="X" Width="16" Height="16" Foreground="{StaticResource TextSecondaryBrush}"/>
                                     </Button>
                                 </StackPanel>

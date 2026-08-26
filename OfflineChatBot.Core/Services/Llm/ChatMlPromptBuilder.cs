@@ -84,7 +84,7 @@ namespace OfflineChatBot.Services.Llm
             if (string.IsNullOrWhiteSpace(documentContext))
                 return string.Empty;
 
-            return $"\n\nExcerpts from the document the user attached:\n---\n{documentContext}\n---\nUse these excerpts when they answer the question, and say so when they do not.";
+            return $"\n\nThe user attached a document. This is its full text:\n---\n{documentContext}\n---\nAnswer from this text, and say so when the answer is not in it.";
         }
 
         private static string RoleOf(ChatMessage message)

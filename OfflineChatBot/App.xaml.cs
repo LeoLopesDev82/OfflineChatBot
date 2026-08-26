@@ -107,7 +107,6 @@ namespace OfflineChatBot
 
             services.AddLogging(builder => builder.AddSerilog(dispose: true));
             services.Configure<GenerationOptions>(configuration.GetSection(GenerationOptions.SectionName));
-            services.Configure<DocumentOptions>(configuration.GetSection(DocumentOptions.SectionName));
 
             services.AddSingleton<HttpClient>();
             services.AddSingleton<ModelFileDownloader>();
@@ -115,16 +114,14 @@ namespace OfflineChatBot
             services.AddSingleton<ILlmService, LlamaSharpService>();
             services.AddSingleton<IModelManagerService, ModelManagerService>();
             services.AddSingleton<IChatStorageService, ChatStorageService>();
-            services.AddSingleton<IEmbeddingService, LlamaEmbeddingService>();
             services.AddSingleton<IDocumentStore, DocumentStore>();
-            services.AddSingleton<TextChunker>();
             services.AddSingleton<IDocumentTextExtractor>(_ => new CompositeTextExtractor(
             [
                 new PlainTextExtractor(),
                 new PdfTextExtractor(),
                 new WordTextExtractor()
             ]));
-            services.AddSingleton<IDocumentIndexService, DocumentIndexService>();
+            services.AddSingleton<IDocumentReader, DocumentReader>();
             services.AddSingleton<IDialogService, DialogService>();
             services.AddSingleton<IResourceMonitor, ProcessResourceMonitor>();
             services.AddSingleton<IUiDispatcher, WpfUiDispatcher>();

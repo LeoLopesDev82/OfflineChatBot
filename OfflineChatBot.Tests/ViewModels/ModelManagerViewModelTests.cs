@@ -1,4 +1,3 @@
-using OfflineChatBot.Models;
 using OfflineChatBot.Tests.Fakes;
 using OfflineChatBot.ViewModels;
 using Xunit;
@@ -8,56 +7,33 @@ namespace OfflineChatBot.Tests.ViewModels
     public class ModelManagerViewModelTests
     {
         [Fact]
-        public async Task RefreshAsync_KeepsEmbeddingModelsOutOfTheConversationList()
+        public async Task RefreshAsync_OffersOnlyTheModelsAlreadyOnDisk()
         {
             var models = await CreateRefreshedAsync();
 
-            Assert.DoesNotContain(models.DownloadedModels, model => model.IsEmbeddingModel);
-            Assert.All(models.DownloadedModels, model => Assert.True(model.IsConversational));
+            Assert.All(models.DownloadedModels, model => Assert.True(model.IsDownloaded));
+            Assert.DoesNotContain(models.DownloadedModels, model => model.FileName == "fake-other.gguf");
         }
 
         [Fact]
-        public async Task RefreshAsync_FindsTheEmbeddingModelInTheCatalog()
+        public async Task RefreshAsync_SelectsADownloadedModel()
         {
             var models = await CreateRefreshedAsync();
 
-            Assert.NotNull(models.EmbeddingModel);
-            Assert.True(models.EmbeddingModel!.IsEmbeddingModel);
+            Assert.NotNull(models.SelectedModel);
+            Assert.True(models.SelectedModel!.IsDownloaded);
         }
 
         [Fact]
-        public async Task CanReadDocuments_IsFalseWhileTheEmbeddingModelIsNotDownloaded()
-        {
-            var models = await CreateRefreshedAsync();
-
-            Assert.False(models.CanReadDocuments);
-        }
-
-        [Fact]
-        public async Task CanReadDocuments_IsTrueOnceTheEmbeddingModelIsDownloaded()
+        public async Task SelectModelAsync_IgnoresAModelThatIsNotDownloaded()
         {
             var catalog = new FakeModelManagerService();
-
-            catalog.Models.Single(model => model.IsEmbeddingModel).IsDownloaded = true;
-
             var models = await CreateRefreshedAsync(catalog);
+            var missing = catalog.Models.Single(model => model.FileName == "fake-other.gguf");
 
-            Assert.True(models.CanReadDocuments);
-        }
+            await models.SelectModelCommand.ExecuteAsync(missing);
 
-        [Fact]
-        public async Task SelectModelAsync_IgnoresAnEmbeddingModel()
-        {
-            var catalog = new FakeModelManagerService();
-            var embedding = catalog.Models.Single(model => model.IsEmbeddingModel);
-
-            embedding.IsDownloaded = true;
-
-            var models = await CreateRefreshedAsync(catalog);
-
-            await models.SelectModelCommand.ExecuteAsync(embedding);
-
-            Assert.NotEqual(embedding, models.SelectedModel);
+            Assert.NotEqual(missing, models.SelectedModel);
         }
 
         private static async Task<ModelManagerViewModel> CreateRefreshedAsync(FakeModelManagerService? catalog = null)
@@ -69,8 +45,7 @@ namespace OfflineChatBot.Tests.ViewModels
                 llm,
                 new FakeDialogService(),
                 status,
-                new FakeLogger<ModelManagerViewModel>(),
-                new FakeEmbeddingService());
+                new FakeLogger<ModelManagerViewModel>());
 
             await models.RefreshAsync();
 

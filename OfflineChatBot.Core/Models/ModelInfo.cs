@@ -17,7 +17,6 @@ namespace OfflineChatBot.Models
         public string FilePath { get; set; } = string.Empty;
         public string DownloadUrl { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
-        public ModelKind Kind { get; set; } = ModelKind.Chat;
 
         public string MmprojFileName { get; set; } = string.Empty;
         public string MmprojFilePath { get; set; } = string.Empty;
@@ -25,9 +24,7 @@ namespace OfflineChatBot.Models
 
         public ModelDownloadState Download { get; } = new ModelDownloadState();
 
-        public bool IsVisionModel => Kind == ModelKind.Vision;
-        public bool IsEmbeddingModel => Kind == ModelKind.Embedding;
-        public bool IsConversational => Kind != ModelKind.Embedding;
+        public bool IsVisionModel { get; set; }
         public bool IsDownloadable => !string.IsNullOrWhiteSpace(DownloadUrl);
 
         public string SizeFormatted => SizeFormatter.FromMegabytes(SizeInMB);

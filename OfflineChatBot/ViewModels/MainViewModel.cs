@@ -3,7 +3,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.IO;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using OfflineChatBot.Models;
 using OfflineChatBot.Services.Abstractions;
 
@@ -13,19 +12,18 @@ namespace OfflineChatBot.ViewModels
     {
         private const string NoModelMessage = "[No downloaded model available. Please open Model Manager to download Qwen 2.5.]";
         private const string VisionRequiredMessage = "Image attachments require a vision model. Please select LLaVA 1.5 7B (Vision & Chat) before sending your message.";
-        private const string EmbeddingRequiredMessage = "Reading documents needs the EmbeddingGemma model. Open the Model Manager and download it, then attach the file again. A chat model is still needed to answer.";
+        private const string TooLargeMessage = "{0} holds {1} tokens, which this model would have to read in {2} parts. Reading a document in parts is not available yet, so the file was not attached.";
 
         private readonly ILlmService _llmService;
         private readonly IChatStorageService _chatStorage;
         private readonly IDialogService _dialogService;
         private readonly IUiDispatcher _uiDispatcher;
         private readonly ILogger<MainViewModel> _logger;
-        private readonly IDocumentIndexService _documents;
+        private readonly IDocumentReader _reader;
         private readonly IDocumentStore _documentStore;
-        private readonly DocumentOptions _documentOptions;
 
         private CancellationTokenSource? _generationCts;
-        private IndexedDocument? _activeDocument;
+        private ReadDocument? _activeDocument;
 
         [ObservableProperty]
         private ObservableCollection<ChatSession> _sessions = new ObservableCollection<ChatSession>();
@@ -50,7 +48,7 @@ namespace OfflineChatBot.ViewModels
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(SendMessageCommand))]
         [NotifyCanExecuteChangedFor(nameof(AttachDocumentCommand))]
-        private bool _isIndexingDocument;
+        private bool _isReadingDocument;
 
         public MainViewModel(
             ILlmService llmService,
@@ -58,9 +56,8 @@ namespace OfflineChatBot.ViewModels
             IDialogService dialogService,
             IUiDispatcher uiDispatcher,
             ILogger<MainViewModel> logger,
-            IDocumentIndexService documents,
+            IDocumentReader reader,
             IDocumentStore documentStore,
-            IOptions<DocumentOptions> documentOptions,
             ModelManagerViewModel models,
             AppStatusViewModel status)
         {
@@ -69,9 +66,8 @@ namespace OfflineChatBot.ViewModels
             _dialogService = dialogService;
             _uiDispatcher = uiDispatcher;
             _logger = logger;
-            _documents = documents;
+            _reader = reader;
             _documentStore = documentStore;
-            _documentOptions = documentOptions.Value;
 
             Models = models;
             Status = status;
@@ -85,8 +81,6 @@ namespace OfflineChatBot.ViewModels
         public bool HasPendingDocument => !string.IsNullOrEmpty(PendingDocumentName);
 
         public bool HasOpenRename => Sessions.Any(session => session.IsEditing);
-
-
 
         public async Task InitializeAsync()
         {
@@ -182,19 +176,12 @@ namespace OfflineChatBot.ViewModels
         [RelayCommand(CanExecute = nameof(IsIdle))]
         public async Task AttachDocumentAsync()
         {
-            if (!await Models.EnsureEmbeddingModelReadyAsync())
-            {
-                _dialogService.ShowInformation(EmbeddingRequiredMessage, "Document Search Model Required");
-
-                return;
-            }
-
             var filePath = _dialogService.PickDocumentFile();
 
             if (string.IsNullOrEmpty(filePath))
                 return;
 
-            await IndexDocumentAsync(CurrentSession ?? CreateAndSelectSession(), filePath);
+            await ReadDocumentAsync(CurrentSession ?? CreateAndSelectSession(), filePath);
         }
 
         [RelayCommand]
@@ -255,7 +242,7 @@ namespace OfflineChatBot.ViewModels
 
         #region Private Methods
 
-        private bool IsIdle() => !IsIndexingDocument;
+        private bool IsIdle() => !IsReadingDocument;
 
         private async Task LoadSessionsAsync()
         {
@@ -275,25 +262,33 @@ namespace OfflineChatBot.ViewModels
             return CurrentSession!;
         }
 
-        private async Task IndexDocumentAsync(ChatSession session, string filePath)
+        private async Task ReadDocumentAsync(ChatSession session, string filePath)
         {
             var fileName = Path.GetFileName(filePath);
 
             PendingDocumentName = fileName;
-            IsIndexingDocument = true;
+            IsReadingDocument = true;
+            Status.Message = $"Reading {fileName}...";
 
             try
             {
-                var progress = new Progress<double>(percentage => Status.Message = $"Reading {fileName}... {percentage:F0}%");
+                var document = await _reader.ReadAsync(filePath);
 
-                _activeDocument = await Task.Run(() => _documents.IndexAsync(filePath, progress));
+                if (!document.FitsInOnePass)
+                {
+                    RejectDocument(document);
 
-                await _documentStore.SaveAsync(session.Id, _activeDocument);
+                    return;
+                }
 
-                session.DocumentName = _activeDocument.Name;
-                PendingDocumentName = _activeDocument.Name;
+                await _documentStore.SaveAsync(session.Id, document.Text);
 
-                Status.Message = $"{fileName} is ready with {_activeDocument.Chunks.Count} passages indexed.";
+                _activeDocument = document;
+
+                session.DocumentName = document.Name;
+                PendingDocumentName = document.Name;
+
+                Status.Message = $"{document.Name} is attached with {document.Tokens} tokens, read in full.";
             }
             catch (Exception exception)
             {
@@ -305,10 +300,20 @@ namespace OfflineChatBot.ViewModels
             }
             finally
             {
-                IsIndexingDocument = false;
+                IsReadingDocument = false;
 
                 SaveSessions();
             }
+        }
+
+        private void RejectDocument(ReadDocument document)
+        {
+            _logger.LogInformation("Refused {DocumentName}, which needs {PartCount} passes", document.Name, document.Parts);
+
+            _dialogService.ShowInformation(string.Format(TooLargeMessage, document.Name, document.Tokens, document.Parts), "Document too large");
+
+            PendingDocumentName = null;
+            Status.Message = "Ready";
         }
 
         private async Task<string> FindDocumentContextAsync(ChatSession session, string prompt)
@@ -321,22 +326,22 @@ namespace OfflineChatBot.ViewModels
             if (document == null)
                 return string.Empty;
 
-            var chunks = await _documents.FindRelevantAsync(document, prompt, _documentOptions.RetrievedChunks);
+            _logger.LogInformation("Sending {DocumentName} in full with {TokenCount} tokens", document.Name, document.Tokens);
 
-            _logger.LogInformation("Retrieved {ChunkCount} passages from {DocumentName}", chunks.Count, document.Name);
-
-            return string.Join("\n\n", chunks.Select(chunk => chunk.Text));
+            return document.Text;
         }
 
-        private async Task<IndexedDocument?> EnsureDocumentLoadedAsync(ChatSession session)
+        private async Task<ReadDocument?> EnsureDocumentLoadedAsync(ChatSession session)
         {
             if (_activeDocument != null)
                 return _activeDocument;
 
-            if (!await Models.EnsureEmbeddingModelReadyAsync())
+            var text = await _documentStore.LoadAsync(session.Id);
+
+            if (text == null)
                 return null;
 
-            _activeDocument = await _documentStore.LoadAsync(session.Id);
+            _activeDocument = _reader.Measure(session.DocumentName!, text);
 
             return _activeDocument;
         }

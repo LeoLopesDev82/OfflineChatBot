@@ -10,7 +10,7 @@ The core objective of this repository is to showcase software engineering practi
 
 * **Local Inference Engine:** Executes `.gguf` quantized models locally.
 * **GPU Acceleration:** Offloads model layers to the GPU through the Vulkan backend, falling back to the CPU automatically when no compatible device is available or when the model does not fit in video memory.
-* **Document Question Answering:** Reads PDF, Word and text files, splits them into passages, turns each one into a vector with a dedicated embedding model and retrieves only the passages that match the question, so a document far larger than the context window can still be discussed.
+* **Document Question Answering:** Reads PDF, Word and text files and puts the whole text in front of the model, so an answer is never limited to the fragments a search happened to pick. The conversation context is kept loaded between messages, so the document is read once and every question after the first is answered immediately.
 * **Context Budgeting:** Counts real tokens with the model tokenizer and trims the oldest turns to fit the context window, reserving room for the answer instead of guessing with a fixed message count.
 * **Vision Support:** Runs multimodal models (LLaVA 1.5 7B) to interpret images attached to the chat, handling the multimodal projection weights and per-turn media state.
 * **Integrated Model Manager:** Includes an asynchronous download manager to fetch HuggingFace models directly from the UI, with proper stream handling and progress reporting.
@@ -74,17 +74,15 @@ Logging goes through `Microsoft.Extensions.Logging` with Serilog behind it, so t
 
 ## 📄 Talking to a Document
 
-Attaching a file does not push the whole document into the prompt, which would never fit. The text is extracted (PdfPig for PDF, OpenXml for Word), split into passages of about three hundred and fifty tokens with a small overlap, and each passage is turned into a vector by a dedicated embedding model. When a question arrives it becomes a vector too, and only the closest passages travel with it to the chat model.
+Attaching a file extracts its text (PdfPig for PDF, OpenXml for Word) and sends all of it to the model. Nothing is split, ranked or sampled: the model sees the document the user sees. That is what makes questions about the whole document work, such as which chapters mention a deadline, which no amount of passage retrieval can answer because the answer does not live in any single passage.
 
-The embedding model is a separate download in the Model Manager and is never selectable as a conversation model: it produces vectors, not answers. Attaching a document is blocked until it is present, and a chat model is still required to write the reply. Vectors are stored next to the conversation and erased with it, so reopening the application does not pay the indexing cost again.
+Reading the document is the expensive step, and it is paid once. Because the conversation context stays loaded, the document is processed on the first question and every question after it starts from the work already done. Measured with a fifteen page document, the first answer took 38.5s and the next ones 0.4s.
 
-Passage size and model choice were measured rather than assumed, and the measurements did not always point where intuition did. Indexing cost is proportional to the amount of text, not to the number of passages, so larger passages buy no speed at all while they dilute the sentence that answers the question among unrelated paragraphs: the same document indexed at seven hundred tokens per passage lost an answer that three hundred and fifty tokens retrieved correctly. A hundred megabyte embedding model indexed that document in 1.2s against 2.9s for the three hundred megabyte one and scored the same on the retrieval benchmark, yet the answers it produced on real documents were visibly worse, so the larger model stayed. Retrieval benchmarks are a proxy for answer quality, not a substitute for reading the answers.
+This has a hard ceiling, and the application is honest about it rather than degrading quietly. The text must fit in the context window alongside the answer, so a file that does not fit is refused with the count of tokens it holds and the number of passes it would need. Reading a document in parts, which removes the ceiling at the cost of one pass per part per question, is not implemented yet.
 
-Indexing is the slow step, and it reports itself. The file appears in the composer the moment it is picked, marked as attaching, and sending stays disabled until the passages are ready, so the wait reads as work in progress rather than as a frozen window.
+The previous version of this feature searched the document instead of reading it, embedding passages and retrieving the closest ones to each question. It was measured, it worked as designed, and it was still replaced: retrieving four passages of a book puts under one percent of it in front of the model, so questions that need the whole picture came back wrong no matter which chat model answered them. Identical bad answers across different models is what pointed at the context rather than the model.
 
-Retrieval answers questions, it does not summarise. Asking what a clause says works because the answer lives in one passage; asking to summarise an entire book does not, because only a handful of passages ever reach the model. That is a property of the technique rather than a defect, and whole document summarisation needs a hierarchical pass that is not implemented here.
-
-Scanned PDFs have no text layer and are rejected with an explanation, since character recognition is not supported. The legacy binary `.doc` format and spreadsheets are out of scope: tabular data needs aggregation or querying rather than similarity search.
+Scanned PDFs have no text layer and are rejected with an explanation, since character recognition is not supported. The legacy binary `.doc` format and spreadsheets are out of scope: tabular data needs aggregation or querying rather than being read as prose.
 
 ## 🚀 Getting Started
 
@@ -99,7 +97,7 @@ Scanned PDFs have no text layer and are rejected with an explanation, since char
    ```
 2. Open the solution in Visual Studio.
 3. Build and Run the project.
-4. On the first launch, open the **Model Manager** to download a Qwen 2.5 model (e.g., 0.5B or 1.5B) to begin chatting.
+6. To ask questions about a document, attach a PDF, Word or text file through the composer. No extra model is needed, and the file is read in full.
 5. To analyze images, download **LLaVA 1.5 7B (Vision & Chat)** in the Model Manager, select it as the active model, and attach an image through the composer.
 6. To ask questions about a document, download **EmbeddingGemma 300M (Document Search)** in the Model Manager, then attach a PDF, Word or text file through the composer. It is indexed once and stays available for that conversation.
 
@@ -108,8 +106,9 @@ Scanned PDFs have no text layer and are rejected with an explanation, since char
 The architecture was designed to be extended. Delivered and upcoming milestones:
 
 - [x] **Vision Models:** Support for Vision-Language Models (VLMs), allowing users to attach images to the chat for context-aware interactions.
-- [x] **Document Analysis:** Retrieval augmented generation over PDF, Word and text files, with a local embedding model and persisted vectors.
-- [ ] **Spreadsheet Analysis:** Answering questions over tabular data through aggregation and querying instead of similarity search.
+- [x] **Document Analysis:** Reading PDF, Word and text files in full, with the conversation context kept loaded so the document is processed once.
+- [ ] **Reading Long Documents in Parts:** Splitting a file that does not fit the context window into passes, so the ceiling becomes a matter of time rather than of capacity.
+- [ ] **Spreadsheet Analysis:** Answering questions over tabular data through aggregation and querying instead of reading it as prose.
 - [x] **Hardware Acceleration:** GPU offloading through the Vulkan backend, toggleable at runtime, with automatic fallback to the CPU.
 
 ## ⚙️ Technology Stack

@@ -1,6 +1,3 @@
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using OfflineChatBot.Models;
 using OfflineChatBot.Tests.Fakes;
 using OfflineChatBot.ViewModels;
 using Xunit;
@@ -10,52 +7,18 @@ namespace OfflineChatBot.Tests.ViewModels
     public class DocumentAttachmentTests
     {
         [Fact]
-        public async Task AttachDocument_WhileIndexing_ShowsTheFileAndBlocksSending()
+        public async Task AttachDocument_KeepsTheWholeTextAndRemembersTheFile()
         {
             var context = await CreateAsync();
 
-            context.Documents.Gate = new TaskCompletionSource();
-            context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
-
-            var attaching = context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
-
-            Assert.True(context.ViewModel.IsIndexingDocument);
-            Assert.Equal("contract.pdf", context.ViewModel.PendingDocumentName);
-            Assert.False(context.ViewModel.SendMessageCommand.CanExecute(null));
-
-            context.Documents.Gate.SetResult();
-
-            await attaching;
-
-            Assert.False(context.ViewModel.IsIndexingDocument);
-            Assert.True(context.ViewModel.SendMessageCommand.CanExecute(null));
-        }
-
-        [Fact]
-        public async Task AttachDocument_WithoutTheEmbeddingModel_ExplainsWhatIsMissing()
-        {
-            var context = await CreateAsync(embeddingDownloaded: false);
-
-            context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
-
-            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
-
-            Assert.False(context.ViewModel.HasPendingDocument);
-            Assert.Contains(context.Dialogs.Information, message => message.Contains("Embedding"));
-        }
-
-        [Fact]
-        public async Task AttachDocument_IndexesTheFileAndRemembersIt()
-        {
-            var context = await CreateAsync();
-
+            context.Reader.Text = "The delivery takes thirty days.";
             context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
 
             await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
 
             Assert.True(context.ViewModel.HasPendingDocument);
             Assert.Equal("contract.pdf", context.ViewModel.PendingDocumentName);
-            Assert.Single(context.DocumentStore.Stored);
+            Assert.Equal("The delivery takes thirty days.", context.DocumentStore.Stored.Values.Single());
         }
 
         [Fact]
@@ -76,7 +39,7 @@ namespace OfflineChatBot.Tests.ViewModels
         {
             var context = await CreateAsync();
 
-            context.Documents.IndexFailure = new InvalidOperationException("No text could be read from contract.pdf");
+            context.Reader.ReadFailure = new InvalidOperationException("No text could be read from contract.pdf");
             context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
 
             await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
@@ -86,10 +49,49 @@ namespace OfflineChatBot.Tests.ViewModels
         }
 
         [Fact]
-        public async Task SendMessage_WithAnAttachedDocument_SendsTheRetrievedPassages()
+        public async Task AttachDocument_WhenTheFileNeedsMoreThanOnePass_RefusesAndSaysSo()
         {
             var context = await CreateAsync();
 
+            context.Reader.Parts = 7;
+            context.Reader.Tokens = 86000;
+            context.Dialogs.PickedDocument = @"C:\docs\book.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            Assert.False(context.ViewModel.HasPendingDocument);
+            Assert.Empty(context.DocumentStore.Stored);
+            Assert.Contains(context.Dialogs.Information, message => message.Contains("86000"));
+        }
+
+        [Fact]
+        public async Task AttachDocument_WhileReading_ShowsTheFileAndBlocksSending()
+        {
+            var context = await CreateAsync();
+
+            context.Reader.Gate = new TaskCompletionSource();
+            context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
+
+            var attaching = context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            Assert.True(context.ViewModel.IsReadingDocument);
+            Assert.Equal("contract.pdf", context.ViewModel.PendingDocumentName);
+            Assert.False(context.ViewModel.SendMessageCommand.CanExecute(null));
+
+            context.Reader.Gate.SetResult();
+
+            await attaching;
+
+            Assert.False(context.ViewModel.IsReadingDocument);
+            Assert.True(context.ViewModel.SendMessageCommand.CanExecute(null));
+        }
+
+        [Fact]
+        public async Task SendMessage_WithAnAttachedDocument_SendsTheWholeText()
+        {
+            var context = await CreateAsync();
+
+            context.Reader.Text = "Clause 7. The delivery takes thirty days. Clause 8. The warranty lasts twelve months.";
             context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
 
             await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
@@ -98,20 +100,7 @@ namespace OfflineChatBot.Tests.ViewModels
 
             await context.ViewModel.SendMessageCommand.ExecuteAsync(null);
 
-            Assert.Equal("How long is the delivery?", context.Documents.LastQuestion);
-            Assert.Contains("delivery takes thirty days", context.Llm.LastDocumentContext);
-        }
-
-        [Fact]
-        public async Task SendMessage_WithoutADocument_SendsNoContext()
-        {
-            var context = await CreateAsync();
-
-            context.ViewModel.UserInput = "Hello";
-
-            await context.ViewModel.SendMessageCommand.ExecuteAsync(null);
-
-            Assert.Equal(string.Empty, context.Llm.LastDocumentContext);
+            Assert.Equal(context.Reader.Text, context.Llm.LastDocumentContext);
         }
 
         [Fact]
@@ -131,6 +120,30 @@ namespace OfflineChatBot.Tests.ViewModels
 
             Assert.Equal("contract.pdf", sent.AttachedDocumentName);
             Assert.False(context.ViewModel.HasPendingDocument);
+        }
+
+        [Fact]
+        public async Task SendMessage_SendsTheConversationIdentity()
+        {
+            var context = await CreateAsync();
+
+            context.ViewModel.UserInput = "Hello";
+
+            await context.ViewModel.SendMessageCommand.ExecuteAsync(null);
+
+            Assert.Equal(context.ViewModel.CurrentSession!.Id, context.Llm.LastConversationId);
+        }
+
+        [Fact]
+        public async Task SendMessage_WithoutADocument_SendsNoContext()
+        {
+            var context = await CreateAsync();
+
+            context.ViewModel.UserInput = "Hello";
+
+            await context.ViewModel.SendMessageCommand.ExecuteAsync(null);
+
+            Assert.Equal(string.Empty, context.Llm.LastDocumentContext);
         }
 
         [Fact]
@@ -166,18 +179,14 @@ namespace OfflineChatBot.Tests.ViewModels
             Assert.Contains(session.Id, context.DocumentStore.Deleted);
         }
 
-        private static async Task<TestContext> CreateAsync(bool embeddingDownloaded = true)
+        private static async Task<TestContext> CreateAsync()
         {
-            var catalog = new FakeModelManagerService();
-
-            catalog.Models.Single(model => model.IsEmbeddingModel).IsDownloaded = embeddingDownloaded;
-
             var llm = new FakeLlmService("Answer");
             var dialogs = new FakeDialogService();
-            var documents = new FakeDocumentIndexService();
+            var reader = new FakeDocumentReader();
             var documentStore = new FakeDocumentStore();
             var status = new AppStatusViewModel(new FakeResourceMonitor(), llm);
-            var models = new ModelManagerViewModel(catalog, llm, dialogs, status, new FakeLogger<ModelManagerViewModel>(), new FakeEmbeddingService());
+            var models = new ModelManagerViewModel(new FakeModelManagerService(), llm, dialogs, status, new FakeLogger<ModelManagerViewModel>());
 
             var viewModel = new MainViewModel(
                 llm,
@@ -185,21 +194,20 @@ namespace OfflineChatBot.Tests.ViewModels
                 dialogs,
                 new ImmediateUiDispatcher(),
                 new FakeLogger<MainViewModel>(),
-                documents,
+                reader,
                 documentStore,
-                Options.Create(new DocumentOptions()),
                 models,
                 status);
 
             await viewModel.InitializeAsync();
 
-            return new TestContext(viewModel, dialogs, documents, documentStore, llm);
+            return new TestContext(viewModel, dialogs, reader, documentStore, llm);
         }
 
         private sealed record TestContext(
             MainViewModel ViewModel,
             FakeDialogService Dialogs,
-            FakeDocumentIndexService Documents,
+            FakeDocumentReader Reader,
             FakeDocumentStore DocumentStore,
             FakeLlmService Llm);
     }

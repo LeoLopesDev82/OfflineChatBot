@@ -192,7 +192,7 @@ namespace OfflineChatBot.Tests.ViewModels
             public required FakeDialogService Dialogs { get; init; }
             public required FakeChatStorageService Storage { get; init; }
             public required FakeLogger<ModelManagerViewModel> ModelsLog { get; init; }
-            public required FakeDocumentIndexService Documents { get; init; }
+            public required FakeDocumentReader Documents { get; init; }
             public required FakeDocumentStore DocumentStore { get; init; }
 
             public static Task<TestContext> CreateAsync(params string[] tokens)
@@ -207,9 +207,9 @@ namespace OfflineChatBot.Tests.ViewModels
                 var storage = new FakeChatStorageService { Stored = storedSessions.ToList() };
                 var status = new AppStatusViewModel(new FakeResourceMonitor(), llm);
                 var modelsLog = new FakeLogger<ModelManagerViewModel>();
-                var documents = new FakeDocumentIndexService();
+                var documents = new FakeDocumentReader();
                 var documentStore = new FakeDocumentStore();
-                var models = new ModelManagerViewModel(new FakeModelManagerService(), llm, dialogs, status, modelsLog, new FakeEmbeddingService());
+                var models = new ModelManagerViewModel(new FakeModelManagerService(), llm, dialogs, status, modelsLog);
                 var viewModel = new MainViewModel(
                     llm,
                     storage,
@@ -218,7 +218,6 @@ namespace OfflineChatBot.Tests.ViewModels
                     new FakeLogger<MainViewModel>(),
                     documents,
                     documentStore,
-                    Options.Create(new DocumentOptions()),
                     models,
                     status);
 

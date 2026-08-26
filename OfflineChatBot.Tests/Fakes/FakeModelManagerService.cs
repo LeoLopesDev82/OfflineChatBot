@@ -6,7 +6,7 @@ namespace OfflineChatBot.Tests.Fakes
     public sealed class FakeModelManagerService : IModelManagerService
     {
         public const string ModelPath = @"C:\models\fake-model.gguf";
-        public const string EmbeddingPath = @"C:\models\fake-embedding.gguf";
+        public const string NotDownloadedPath = @"C:\models\fake-other.gguf";
 
         public List<ModelInfo> Models { get; set; } = new List<ModelInfo>
         {
@@ -19,10 +19,9 @@ namespace OfflineChatBot.Tests.Fakes
             },
             new ModelInfo
             {
-                Name = "Fake Embedding",
-                FileName = "fake-embedding.gguf",
-                FilePath = EmbeddingPath,
-                Kind = ModelKind.Embedding,
+                Name = "Fake Other Model",
+                FileName = "fake-other.gguf",
+                FilePath = NotDownloadedPath,
                 IsDownloaded = false
             }
         };

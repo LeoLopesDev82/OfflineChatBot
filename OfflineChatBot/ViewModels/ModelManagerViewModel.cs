@@ -14,7 +14,6 @@ namespace OfflineChatBot.ViewModels
         private readonly IDialogService _dialogService;
         private readonly AppStatusViewModel _status;
         private readonly ILogger<ModelManagerViewModel> _logger;
-        private readonly IEmbeddingService _embeddings;
 
         private Task? _warmupTask;
 
@@ -36,29 +35,22 @@ namespace OfflineChatBot.ViewModels
         [ObservableProperty]
         private bool _useGpu;
 
-        [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(CanReadDocuments))]
-        private ModelInfo? _embeddingModel;
-
         public ModelManagerViewModel(
             IModelManagerService modelManager,
             ILlmService llmService,
             IDialogService dialogService,
             AppStatusViewModel status,
-            ILogger<ModelManagerViewModel> logger,
-            IEmbeddingService embeddings)
+            ILogger<ModelManagerViewModel> logger)
         {
             _modelManager = modelManager;
             _llmService = llmService;
             _dialogService = dialogService;
             _status = status;
             _logger = logger;
-            _embeddings = embeddings;
 
             _useGpu = llmService.UseGpu;
         }
 
-        public bool CanReadDocuments => EmbeddingModel?.IsDownloaded == true;
 
         public string BackendDescription => _llmService.Backend.UsesGpu
             ? $"Running on {_llmService.Backend.Device}"
@@ -76,29 +68,9 @@ namespace OfflineChatBot.ViewModels
             var models = await _modelManager.GetAvailableModelsAsync();
 
             AvailableModels = new ObservableCollection<ModelInfo>(models);
-            DownloadedModels = new ObservableCollection<ModelInfo>(models.Where(model => model.IsDownloaded && model.IsConversational));
-            EmbeddingModel = models.FirstOrDefault(model => model.IsEmbeddingModel);
+            DownloadedModels = new ObservableCollection<ModelInfo>(models.Where(model => model.IsDownloaded));
 
             SelectedModel = FindEquivalentDownloadedModel(SelectedModel) ?? DownloadedModels.FirstOrDefault();
-        }
-
-        public async Task<bool> EnsureEmbeddingModelReadyAsync()
-        {
-            var model = EmbeddingModel;
-
-            if (model?.IsDownloaded != true)
-                return false;
-
-            if (_embeddings.IsLoaded)
-                return true;
-
-            _status.Message = "Loading the document search model...";
-
-            await _embeddings.LoadAsync(model.FilePath);
-
-            _status.Message = "Ready";
-
-            return true;
         }
 
         public async Task<ModelInfo?> EnsureActiveModelReadyAsync()
@@ -123,7 +95,7 @@ namespace OfflineChatBot.ViewModels
         [RelayCommand]
         public async Task SelectModelAsync(ModelInfo? model)
         {
-            if (model == null || !model.IsDownloaded || !model.IsConversational)
+            if (model == null || !model.IsDownloaded)
                 return;
 
             SelectedModel = model;

@@ -31,6 +31,11 @@ namespace OfflineChatBot.Services.Llm
             return text;
         }
 
+        public string BuildTurn(string userPrompt)
+        {
+            return FormatTurn("user", userPrompt) + AssistantOpening;
+        }
+
         public PromptResult Build(IEnumerable<ChatMessage> history, string userPrompt, string documentContext = "")
         {
             var opening = FormatTurn("system", SystemPrompt + DocumentBlock(documentContext));

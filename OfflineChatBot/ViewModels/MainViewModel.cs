@@ -238,7 +238,7 @@ namespace OfflineChatBot.ViewModels
             var answer = session.AddStreamingAssistantMessage();
             var documentContext = await FindDocumentContextAsync(session, prompt);
 
-            await GenerateAnswerAsync(answer, history, prompt, imagePath, documentContext);
+            await GenerateAnswerAsync(answer, session.Id, history, prompt, imagePath, documentContext);
         }
 
         [RelayCommand]
@@ -379,7 +379,7 @@ namespace OfflineChatBot.ViewModels
             PendingImagePath = null;
         }
 
-        private async Task GenerateAnswerAsync(ChatMessage answer, List<ChatMessage> history, string prompt, string? imagePath, string documentContext)
+        private async Task GenerateAnswerAsync(ChatMessage answer, string conversationId, List<ChatMessage> history, string prompt, string? imagePath, string documentContext)
         {
             IsGenerating = true;
 
@@ -387,7 +387,7 @@ namespace OfflineChatBot.ViewModels
 
             try
             {
-                await RequestAnswerAsync(answer, history, prompt, imagePath, documentContext);
+                await RequestAnswerAsync(answer, conversationId, history, prompt, imagePath, documentContext);
             }
             catch (OperationCanceledException)
             {
@@ -407,7 +407,7 @@ namespace OfflineChatBot.ViewModels
             }
         }
 
-        private async Task RequestAnswerAsync(ChatMessage answer, List<ChatMessage> history, string prompt, string? imagePath, string documentContext)
+        private async Task RequestAnswerAsync(ChatMessage answer, string conversationId, List<ChatMessage> history, string prompt, string? imagePath, string documentContext)
         {
             var model = await Models.EnsureActiveModelReadyAsync();
 
@@ -420,11 +420,12 @@ namespace OfflineChatBot.ViewModels
                 return;
             }
 
-            await StreamAnswerAsync(answer, history, prompt, imagePath, documentContext, _generationCts!.Token);
+            await StreamAnswerAsync(answer, conversationId, history, prompt, imagePath, documentContext, _generationCts!.Token);
         }
 
         private Task StreamAnswerAsync(
             ChatMessage answer,
+            string conversationId,
             List<ChatMessage> history,
             string prompt,
             string? imagePath,
@@ -433,7 +434,7 @@ namespace OfflineChatBot.ViewModels
         {
             return Task.Run(async () =>
             {
-                var stream = _llmService.GenerateResponseStreamAsync(history, prompt, imagePath, documentContext, cancellationToken);
+                var stream = _llmService.GenerateResponseStreamAsync(conversationId, history, prompt, imagePath, documentContext, cancellationToken);
 
                 await foreach (var token in stream.WithCancellation(cancellationToken))
                     await _uiDispatcher.InvokeAsync(() => answer.Content += token, cancellationToken);

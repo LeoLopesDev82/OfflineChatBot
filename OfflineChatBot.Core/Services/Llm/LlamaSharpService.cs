@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using LLama;
-using LLama.Abstractions;
 using LLama.Common;
 using LLama.Native;
 using LLama.Sampling;
@@ -19,12 +18,13 @@ namespace OfflineChatBot.Services.Llm
         private readonly GenerationOptions _options;
         private readonly ILogger<LlamaSharpService> _logger;
         private readonly ChatMlPromptBuilder _promptBuilder;
+        private readonly ConversationTracker _tracker;
         private readonly SemaphoreSlim _loadLock = new SemaphoreSlim(1, 1);
 
         private LLamaWeights? _weights;
         private MtmdWeights? _visionWeights;
         private ModelParams? _parameters;
-        private ILLamaExecutor? _executor;
+        private InteractiveExecutor? _executor;
         private LLamaContext? _context;
         private string _mediaMarker = string.Empty;
 
@@ -33,6 +33,7 @@ namespace OfflineChatBot.Services.Llm
             _options = options.Value;
             _logger = logger;
             _promptBuilder = new ChatMlPromptBuilder(this, _options);
+            _tracker = new ConversationTracker(_options);
 
             UseGpu = _options.UseGpu;
         }
@@ -107,45 +108,52 @@ namespace OfflineChatBot.Services.Llm
         }
 
         public async IAsyncEnumerable<string> GenerateResponseStreamAsync(
+            string conversationId,
             IEnumerable<ChatMessage> history,
             string userPrompt,
             string? imagePath = null,
             string documentContext = "",
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            var executor = await GetLoadedExecutorAsync(cancellationToken);
-
-            ResetVisionState(executor);
-
-            var prompt = BuildPrompt(history, AttachImage(executor, userPrompt, imagePath), documentContext);
+            var messages = await PrepareAsync(history, cancellationToken);
+            var input = PrepareInput(conversationId, messages, userPrompt, imagePath, documentContext);
             var filter = new StopTokenFilter();
             var throughput = new ThroughputMeter();
             var isFirstChunk = true;
+            var completed = false;
 
-            await foreach (var chunk in executor.InferAsync(prompt, CreateInferenceParams(), cancellationToken))
+            try
             {
-                throughput.Count();
+                await foreach (var chunk in _executor!.InferAsync(input.Text, CreateInferenceParams(), cancellationToken))
+                {
+                    throughput.Count();
 
-                var text = filter.Take(isFirstChunk ? TrimAssistantPrefix(chunk) : chunk);
+                    var text = filter.Take(isFirstChunk ? TrimAssistantPrefix(chunk) : chunk);
 
-                isFirstChunk = false;
+                    isFirstChunk = false;
+                    LastTokensPerSecond = throughput.TokensPerSecond;
 
+                    if (string.IsNullOrEmpty(text))
+                        continue;
+
+                    yield return text;
+                }
+
+                var remainingText = filter.Flush();
+
+                if (!string.IsNullOrEmpty(remainingText))
+                    yield return remainingText;
+
+                completed = true;
+            }
+            finally
+            {
                 LastTokensPerSecond = throughput.TokensPerSecond;
 
-                if (string.IsNullOrEmpty(text))
-                    continue;
+                _logger.LogInformation("Generated {TokenCount} tokens at {TokensPerSecond:F1} tokens per second", throughput.TokenCount, LastTokensPerSecond);
 
-                yield return text;
+                Remember(completed, conversationId, messages.Count, documentContext, input.TokenCount + throughput.TokenCount);
             }
-
-            var remainingText = filter.Flush();
-
-            LastTokensPerSecond = throughput.TokensPerSecond;
-
-            _logger.LogInformation("Generated {TokenCount} tokens at {TokensPerSecond:F1} tokens per second", throughput.TokenCount, LastTokensPerSecond);
-
-            if (!string.IsNullOrEmpty(remainingText))
-                yield return remainingText;
         }
 
         public void Dispose()
@@ -162,18 +170,59 @@ namespace OfflineChatBot.Services.Llm
             return IsLoaded && LoadedModelPath == modelPath;
         }
 
-        private string BuildPrompt(IEnumerable<ChatMessage> history, string userPrompt, string documentContext)
+        private async Task<List<ChatMessage>> PrepareAsync(IEnumerable<ChatMessage> history, CancellationToken cancellationToken)
         {
-            var result = _promptBuilder.Build(history, userPrompt, documentContext);
+            await _loadLock.WaitAsync(cancellationToken);
+
+            try
+            {
+                if (_executor == null)
+                    throw new InvalidOperationException("No model is loaded into memory.");
+
+                return history.Where(message => message.IsUser || message.IsAssistant).ToList();
+            }
+            finally
+            {
+                _loadLock.Release();
+            }
+        }
+
+        private PromptResult PrepareInput(string conversationId, List<ChatMessage> history, string userPrompt, string? imagePath, string documentContext)
+        {
+            var turn = _promptBuilder.BuildTurn(userPrompt);
+            var turnTokens = Count(turn);
+
+            if (_tracker.CanContinue(conversationId, history.Count, documentContext, imagePath != null, turnTokens))
+            {
+                _logger.LogInformation("Continued the loaded context, sending {TokenCount} new tokens instead of the whole conversation", turnTokens);
+
+                return new PromptResult(turn, turnTokens, history.Count, 0);
+            }
+
+            RestartContext();
+
+            var result = _promptBuilder.Build(history, AttachImage(userPrompt, imagePath), documentContext);
 
             _logger.LogInformation(
-                "Prompt uses {TokenCount} of {ContextSize} tokens, keeping {IncludedMessages} history messages and dropping {DroppedMessages}",
+                "Rebuilt the context with {TokenCount} of {ContextSize} tokens, keeping {IncludedMessages} history messages and dropping {DroppedMessages}",
                 result.TokenCount,
                 _options.ContextSize,
                 result.IncludedMessages,
                 result.DroppedMessages);
 
-            return result.Text;
+            return result;
+        }
+
+        private void Remember(bool completed, string conversationId, int historyCount, string documentContext, int addedTokens)
+        {
+            if (!completed)
+            {
+                _tracker.Invalidate();
+
+                return;
+            }
+
+            _tracker.Advance(conversationId, historyCount, documentContext, addedTokens);
         }
 
         private static int EstimateTokens(string text)
@@ -206,15 +255,17 @@ namespace OfflineChatBot.Services.Llm
 
             _weights = LLamaWeights.LoadFromFile(_parameters);
 
-            _executor = string.IsNullOrEmpty(visionProjectionPath)
-                ? new StatelessExecutor(_weights, _parameters)
-                : CreateVisionExecutor(visionProjectionPath);
+            LoadVisionWeights(visionProjectionPath);
+            RestartContext();
         }
 
         private int RequestedGpuLayers => UseGpu ? _options.GpuLayerCount : 0;
 
-        private ILLamaExecutor CreateVisionExecutor(string visionProjectionPath)
+        private void LoadVisionWeights(string? visionProjectionPath)
         {
+            if (string.IsNullOrEmpty(visionProjectionPath))
+                return;
+
             EnsureFileExists(visionProjectionPath, "Vision projection file not found.");
 
             var visionParameters = MtmdContextParams.Default();
@@ -223,49 +274,44 @@ namespace OfflineChatBot.Services.Llm
 
             _visionWeights = MtmdWeights.LoadFromFile(visionProjectionPath, _weights!, visionParameters);
             _mediaMarker = visionParameters.MediaMarker ?? NativeApi.MtmdDefaultMarker() ?? string.Empty;
-            _context = _weights!.CreateContext(_parameters!);
-
-            return new InteractiveExecutor(_context, _visionWeights);
         }
 
-        private async Task<ILLamaExecutor> GetLoadedExecutorAsync(CancellationToken cancellationToken)
+        private void RestartContext()
         {
-            await _loadLock.WaitAsync(cancellationToken);
-
-            try
-            {
-                return _executor ?? throw new InvalidOperationException("No model is loaded into memory.");
-            }
-            finally
-            {
-                _loadLock.Release();
-            }
-        }
-
-        private void ResetVisionState(ILLamaExecutor executor)
-        {
-            if (executor is not InteractiveExecutor interactiveExecutor)
-                return;
-
-            _context?.NativeHandle.MemoryClear();
-
-            foreach (var embed in interactiveExecutor.Embeds)
-                embed.Dispose();
-
-            interactiveExecutor.Embeds.Clear();
+            DisposeEmbeds();
 
             _visionWeights?.ClearMedia();
+
+            _context?.Dispose();
+            _context = _weights!.CreateContext(_parameters!);
+
+            _executor = _visionWeights == null
+                ? new InteractiveExecutor(_context)
+                : new InteractiveExecutor(_context, _visionWeights);
+
+            _tracker.Invalidate();
         }
 
-        private string AttachImage(ILLamaExecutor executor, string userPrompt, string? imagePath)
+        private void DisposeEmbeds()
         {
-            if (string.IsNullOrEmpty(imagePath) || _visionWeights == null)
+            if (_executor == null)
+                return;
+
+            foreach (var embed in _executor.Embeds)
+                embed.Dispose();
+
+            _executor.Embeds.Clear();
+        }
+
+        private string AttachImage(string userPrompt, string? imagePath)
+        {
+            if (string.IsNullOrEmpty(imagePath))
                 return userPrompt;
 
-            if (executor is not InteractiveExecutor visionExecutor || string.IsNullOrEmpty(_mediaMarker))
+            if (_visionWeights == null || string.IsNullOrEmpty(_mediaMarker))
                 throw new InvalidOperationException("The selected vision model is not ready to process images.");
 
-            visionExecutor.Embeds.Add(_visionWeights.LoadMedia(imagePath));
+            _executor!.Embeds.Add(_visionWeights.LoadMedia(imagePath));
 
             return $"{_mediaMarker}\n{userPrompt}";
         }
@@ -301,6 +347,8 @@ namespace OfflineChatBot.Services.Llm
 
         private void UnloadInternal()
         {
+            DisposeEmbeds();
+
             _executor = null;
             _parameters = null;
 
@@ -312,6 +360,8 @@ namespace OfflineChatBot.Services.Llm
 
             _weights?.Dispose();
             _weights = null;
+
+            _tracker.Invalidate();
 
             LoadedModelPath = string.Empty;
             _mediaMarker = string.Empty;

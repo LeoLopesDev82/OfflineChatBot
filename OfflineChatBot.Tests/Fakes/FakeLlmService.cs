@@ -22,6 +22,7 @@ namespace OfflineChatBot.Tests.Fakes
         public string? LastPrompt { get; private set; }
         public string? LastImagePath { get; private set; }
         public string LastDocumentContext { get; private set; } = string.Empty;
+        public string LastConversationId { get; private set; } = string.Empty;
         public List<ChatMessage> LastHistory { get; private set; } = new List<ChatMessage>();
         public int LoadCount { get; private set; }
         public int UnloadCount { get; private set; }
@@ -48,12 +49,14 @@ namespace OfflineChatBot.Tests.Fakes
         }
 
         public async IAsyncEnumerable<string> GenerateResponseStreamAsync(
+            string conversationId,
             IEnumerable<ChatMessage> history,
             string userPrompt,
             string? imagePath = null,
             string documentContext = "",
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
+            LastConversationId = conversationId;
             LastHistory = history.ToList();
             LastPrompt = userPrompt;
             LastImagePath = imagePath;

@@ -15,6 +15,7 @@ namespace OfflineChatBot.Services.Abstractions
         Task UnloadModelAsync();
 
         IAsyncEnumerable<string> GenerateResponseStreamAsync(
+            string conversationId,
             IEnumerable<ChatMessage> history,
             string userPrompt,
             string? imagePath = null,

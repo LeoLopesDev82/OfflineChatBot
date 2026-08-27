@@ -44,9 +44,9 @@ namespace OfflineChatBot.Views
 
         private static Window? ActiveOwner()
         {
-            var mainWindow = Application.Current.MainWindow;
-
-            return mainWindow?.IsLoaded == true ? mainWindow : null;
+            return Application.Current?.Windows
+                .OfType<Window>()
+                .FirstOrDefault(window => window.IsLoaded && window.IsActive);
         }
 
         private void ShowButtons(MessageBoxButton button)

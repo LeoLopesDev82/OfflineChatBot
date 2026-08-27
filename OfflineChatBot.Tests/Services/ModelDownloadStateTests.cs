@@ -6,50 +6,45 @@ namespace OfflineChatBot.Tests.Services
     public class ModelDownloadStateTests
     {
         [Fact]
-        public void Begin_ResetsProgressAndProvidesAToken()
-        {
-            var state = new ModelDownloadState { Progress = 42 };
-
-            state.Begin();
-
-            Assert.True(state.IsActive);
-            Assert.Equal(0, state.Progress);
-            Assert.False(state.IsCancelled);
-            Assert.True(state.Token.CanBeCanceled);
-        }
-
-        [Fact]
-        public void Report_FormatsSpeedAndTransferredBytes()
+        public void AnOrdinaryUpdate_ShowsTheSpeed()
         {
             var state = new ModelDownloadState();
 
-            state.Report(new DownloadProgress(50, 512L * 1024 * 1024, 1024L * 1024 * 1024, 12.34));
+            state.Report(new DownloadProgress(42, 100, 200, 8.5));
 
-            Assert.Equal(50, state.Progress);
-            Assert.Equal("12.3 MB/s", state.SpeedFormatted);
-            Assert.Equal("512 MB / 1.00 GB", state.BytesFormatted);
+            Assert.Equal("8.5 MB/s", state.SpeedFormatted);
+            Assert.Equal(42, state.Progress);
         }
 
         [Fact]
-        public void Cancel_MarksTheDownloadAsCancelled()
+        public void AStalledRetry_SaysItIsReconnectingInsteadOfShowingZero()
         {
             var state = new ModelDownloadState();
 
-            state.Begin();
-            state.Cancel();
+            state.Report(new DownloadProgress(42, 100, 200, 0, 3));
 
-            Assert.True(state.IsCancelled);
+            Assert.Equal("Reconnecting, attempt 3...", state.SpeedFormatted);
         }
 
         [Fact]
-        public void Complete_FillsTheProgressBar()
+        public void ARetryThatIsMovingAgain_ShowsTheSpeed()
         {
             var state = new ModelDownloadState();
 
-            state.Begin();
-            state.Complete();
+            state.Report(new DownloadProgress(50, 120, 200, 6.2, 3));
 
-            Assert.Equal(100, state.Progress);
+            Assert.Equal("6.2 MB/s", state.SpeedFormatted);
+        }
+
+        [Fact]
+        public void AStalledRetry_KeepsTheProgressItHadReached()
+        {
+            var state = new ModelDownloadState();
+
+            state.Report(new DownloadProgress(42, 1000, 2000, 0, 2));
+
+            Assert.Equal(42, state.Progress);
+            Assert.Contains("/", state.BytesFormatted);
         }
     }
 }

@@ -108,7 +108,7 @@ namespace OfflineChatBot
             services.AddLogging(builder => builder.AddSerilog(dispose: true));
             services.Configure<GenerationOptions>(configuration.GetSection(GenerationOptions.SectionName));
 
-            services.AddSingleton<HttpClient>();
+            services.AddSingleton(_ => new HttpClient { Timeout = Timeout.InfiniteTimeSpan });
             services.AddSingleton<ModelFileDownloader>();
 
             services.AddSingleton<ILlmService, LlamaSharpService>();

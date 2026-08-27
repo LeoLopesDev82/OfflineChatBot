@@ -43,9 +43,9 @@ namespace OfflineChatBot.Services.Models
                 new ModelInfo
                 {
                     Name = "Qwen 2.5 7B Instruct (Maximum Intelligence)",
-                    FileName = "qwen2.5-7b-instruct-q4_k_m.gguf",
-                    DownloadUrl = "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf",
-                    SizeInMB = 4680,
+                    FileName = "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+                    DownloadUrl = "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+                    SizeInMB = 4466,
                     Description = "Most powerful model in the lineup. Near GPT-level intelligence for complex analysis, long-form writing, and expert-level coding."
                 },
                 new ModelInfo

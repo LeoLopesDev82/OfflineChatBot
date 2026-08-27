@@ -37,8 +37,16 @@ namespace OfflineChatBot.Models
         public void Report(DownloadProgress update)
         {
             Progress = update.Percentage;
-            SpeedFormatted = string.Format(CultureInfo.InvariantCulture, "{0:F1} MB/s", update.SpeedMbPerSecond);
+            SpeedFormatted = Speed(update);
             BytesFormatted = $"{SizeFormatter.FromBytes(update.BytesReceived)} / {SizeFormatter.FromBytes(update.TotalBytes)}";
+        }
+
+        private static string Speed(DownloadProgress update)
+        {
+            if (update.Attempt > 1 && update.SpeedMbPerSecond <= 0)
+                return $"Reconnecting, attempt {update.Attempt}...";
+
+            return string.Format(CultureInfo.InvariantCulture, "{0:F1} MB/s", update.SpeedMbPerSecond);
         }
 
         public void Complete()

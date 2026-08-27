@@ -23,6 +23,8 @@ namespace OfflineChatBot.Tests.Fakes
         public string? LastImagePath { get; private set; }
         public string LastDocumentContext { get; private set; } = string.Empty;
         public string LastConversationId { get; private set; } = string.Empty;
+        public List<string> CompletedParts { get; } = new List<string>();
+        public string CompletionAnswer { get; set; } = "NOTHING";
         public List<ChatMessage> LastHistory { get; private set; } = new List<ChatMessage>();
         public int LoadCount { get; private set; }
         public int UnloadCount { get; private set; }
@@ -46,6 +48,13 @@ namespace OfflineChatBot.Tests.Fakes
             IsLoaded = false;
 
             return Task.CompletedTask;
+        }
+
+        public Task<string> CompleteAsync(string question, string content, CancellationToken cancellationToken = default)
+        {
+            CompletedParts.Add(content);
+
+            return Task.FromResult(CompletionAnswer);
         }
 
         public async IAsyncEnumerable<string> GenerateResponseStreamAsync(

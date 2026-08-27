@@ -107,6 +107,33 @@ namespace OfflineChatBot.Services.Llm
             }
         }
 
+        public async Task<string> CompleteAsync(string question, string content, CancellationToken cancellationToken = default)
+        {
+            await PrepareAsync([], cancellationToken);
+
+            RestartContext();
+
+            var prompt = _promptBuilder.Build([], question, content);
+            var filter = new StopTokenFilter();
+            var answer = new StringBuilder();
+
+            try
+            {
+                await foreach (var chunk in _executor!.InferAsync(prompt.Text, CreateInferenceParams(_options.MaxNoteTokens), cancellationToken))
+                    answer.Append(filter.Take(chunk));
+
+                answer.Append(filter.Flush());
+            }
+            finally
+            {
+                _tracker.Invalidate();
+            }
+
+            _logger.LogInformation("Completed a standalone pass over {TokenCount} tokens of content", prompt.TokenCount);
+
+            return answer.ToString().Trim();
+        }
+
         public async IAsyncEnumerable<string> GenerateResponseStreamAsync(
             string conversationId,
             IEnumerable<ChatMessage> history,
@@ -124,7 +151,7 @@ namespace OfflineChatBot.Services.Llm
 
             try
             {
-                await foreach (var chunk in _executor!.InferAsync(input.Text, CreateInferenceParams(), cancellationToken))
+                await foreach (var chunk in _executor!.InferAsync(input.Text, CreateInferenceParams(_options.MaxTokens), cancellationToken))
                 {
                     throughput.Count();
 
@@ -316,11 +343,11 @@ namespace OfflineChatBot.Services.Llm
             return $"{_mediaMarker}\n{userPrompt}";
         }
 
-        private InferenceParams CreateInferenceParams()
+        private InferenceParams CreateInferenceParams(int maxTokens)
         {
             return new InferenceParams
             {
-                MaxTokens = _options.MaxTokens,
+                MaxTokens = maxTokens,
                 AntiPrompts = ChatMlPromptBuilder.StopTokens.ToList(),
                 SamplingPipeline = new DefaultSamplingPipeline
                 {

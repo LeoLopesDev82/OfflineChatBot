@@ -4,6 +4,9 @@ namespace OfflineChatBot.Services.Abstractions
 {
     public interface IDocumentReader
     {
+        int RoomPerPass { get; }
+        int RoomForAnswer { get; }
+
         bool CanRead(string filePath);
 
         Task<ReadDocument> ReadAsync(string filePath, CancellationToken cancellationToken = default);

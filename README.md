@@ -76,10 +76,12 @@ Logging goes through `Microsoft.Extensions.Logging` with Serilog behind it, so t
 
 Attaching a file extracts its text (PdfPig for PDF, OpenXml for Word) and sends all of it to the model. Nothing is split, ranked or sampled: the model sees the document the user sees. That is what makes questions about the whole document work, such as which chapters mention a deadline, which no amount of passage retrieval can answer because the answer does not live in any single passage.
 
-Reading the document is the expensive step, and it is paid once. Because the conversation context stays loaded, the document is processed on the first question and every question after it starts from the work already done. Measured with a fifteen page document, the first answer took 38.5s and the next ones 0.4s.
+When the document fits, reading it is the expensive step and it is paid once. Because the conversation context stays loaded, the document is processed on the first question and every question after it starts from the work already done. Measured with a fifteen page document, the first answer took 38.5s and the next ones 0.4s.
 
-This has a hard ceiling, and the application is honest about it rather than degrading quietly. The text must fit in the context window alongside the answer, so a file that does not fit is refused with the count of tokens it holds and the number of passes it would need. Reading a document in parts, which removes the ceiling at the cost of one pass per part per question, is not implemented yet.
+A file larger than the context window is not turned away and is never cut down to what fits. It is read in parts: the question is put to every part in turn, each part answers with what it holds or with nothing, and the collected notes become the context for the final answer. Nothing is skipped, so a name that appears once in the middle of a long document is still found, which is exactly what retrieval could not do. The cost is one pass per part on every question, so the application says how many parts a file needs and asks before accepting it, then reports progress and a running estimate while it works.
 
+
+How expensive that is depends entirely on the hardware, and the difference is not subtle. On the GeForce GTX 1050 Ti this was built on, a seventy six thousand token novel is read in eleven parts and takes about fourteen minutes for every question asked. The same work on a card able to hold a long context model needs no parts at all: the novel fits in a single pass, the conversation context keeps it loaded, and every question after the first is answered immediately. The technique is the fallback for when the document does not fit, not the path a capable machine takes.
 The previous version of this feature searched the document instead of reading it, embedding passages and retrieving the closest ones to each question. It was measured, it worked as designed, and it was still replaced: retrieving four passages of a book puts under one percent of it in front of the model, so questions that need the whole picture came back wrong no matter which chat model answered them. Identical bad answers across different models is what pointed at the context rather than the model.
 
 Scanned PDFs have no text layer and are rejected with an explanation, since character recognition is not supported. The legacy binary `.doc` format and spreadsheets are out of scope: tabular data needs aggregation or querying rather than being read as prose.
@@ -107,7 +109,7 @@ The architecture was designed to be extended. Delivered and upcoming milestones:
 
 - [x] **Vision Models:** Support for Vision-Language Models (VLMs), allowing users to attach images to the chat for context-aware interactions.
 - [x] **Document Analysis:** Reading PDF, Word and text files in full, with the conversation context kept loaded so the document is processed once.
-- [ ] **Reading Long Documents in Parts:** Splitting a file that does not fit the context window into passes, so the ceiling becomes a matter of time rather than of capacity.
+- [x] **Reading Long Documents in Parts:** Putting the question to every part of a file that does not fit the context window, so size costs time rather than accuracy.
 - [ ] **Spreadsheet Analysis:** Answering questions over tabular data through aggregation and querying instead of reading it as prose.
 - [x] **Hardware Acceleration:** GPU offloading through the Vulkan backend, toggleable at runtime, with automatic fallback to the CPU.
 

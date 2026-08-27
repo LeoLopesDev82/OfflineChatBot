@@ -6,7 +6,6 @@ namespace OfflineChatBot.Models
         public string Text { get; set; } = string.Empty;
         public int Tokens { get; set; }
         public int Parts { get; set; }
-
-        public bool FitsInOnePass => Parts <= 1;
+        public bool FitsInOnePass { get; set; }
     }
 }

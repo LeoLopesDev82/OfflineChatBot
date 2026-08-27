@@ -121,7 +121,9 @@ namespace OfflineChatBot
                 new PdfTextExtractor(),
                 new WordTextExtractor()
             ]));
+            services.AddSingleton<TextSplitter>();
             services.AddSingleton<IDocumentReader, DocumentReader>();
+            services.AddSingleton<IDocumentScanner, DocumentScanner>();
             services.AddSingleton<IDialogService, DialogService>();
             services.AddSingleton<IResourceMonitor, ProcessResourceMonitor>();
             services.AddSingleton<IUiDispatcher, WpfUiDispatcher>();

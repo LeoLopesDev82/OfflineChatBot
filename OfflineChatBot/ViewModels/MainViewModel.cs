@@ -12,7 +12,7 @@ namespace OfflineChatBot.ViewModels
     {
         private const string NoModelMessage = "[No downloaded model available. Please open Model Manager to download Qwen 2.5.]";
         private const string VisionRequiredMessage = "Image attachments require a vision model. Please select LLaVA 1.5 7B (Vision & Chat) before sending your message.";
-        private const string TooLargeMessage = "{0} holds {1} tokens, which this model would have to read in {2} parts. Reading a document in parts is not available yet, so the file was not attached.";
+        private const string PartedReadingMessage = "{0} holds {1} tokens, more than this model can read at once. It will be read in {2} parts, and every question will pay that cost. Attach it anyway?";
 
         private readonly ILlmService _llmService;
         private readonly IChatStorageService _chatStorage;
@@ -20,6 +20,7 @@ namespace OfflineChatBot.ViewModels
         private readonly IUiDispatcher _uiDispatcher;
         private readonly ILogger<MainViewModel> _logger;
         private readonly IDocumentReader _reader;
+        private readonly IDocumentScanner _scanner;
         private readonly IDocumentStore _documentStore;
 
         private CancellationTokenSource? _generationCts;
@@ -57,6 +58,7 @@ namespace OfflineChatBot.ViewModels
             IUiDispatcher uiDispatcher,
             ILogger<MainViewModel> logger,
             IDocumentReader reader,
+            IDocumentScanner scanner,
             IDocumentStore documentStore,
             ModelManagerViewModel models,
             AppStatusViewModel status)
@@ -67,6 +69,7 @@ namespace OfflineChatBot.ViewModels
             _uiDispatcher = uiDispatcher;
             _logger = logger;
             _reader = reader;
+            _scanner = scanner;
             _documentStore = documentStore;
 
             Models = models;
@@ -223,9 +226,8 @@ namespace OfflineChatBot.ViewModels
             session.AddUserMessage(prompt, imagePath, documentName);
 
             var answer = session.AddStreamingAssistantMessage();
-            var documentContext = await FindDocumentContextAsync(session, prompt);
 
-            await GenerateAnswerAsync(answer, session.Id, history, prompt, imagePath, documentContext);
+            await GenerateAnswerAsync(answer, session, history, prompt, imagePath);
         }
 
         [RelayCommand]
@@ -272,11 +274,12 @@ namespace OfflineChatBot.ViewModels
 
             try
             {
-                var document = await _reader.ReadAsync(filePath);
+                var document = await Task.Run(() => _reader.ReadAsync(filePath));
 
-                if (!document.FitsInOnePass)
+                if (!ConfirmPartedReading(document))
                 {
-                    RejectDocument(document);
+                    PendingDocumentName = null;
+                    Status.Message = "Ready";
 
                     return;
                 }
@@ -288,7 +291,9 @@ namespace OfflineChatBot.ViewModels
                 session.DocumentName = document.Name;
                 PendingDocumentName = document.Name;
 
-                Status.Message = $"{document.Name} is attached with {document.Tokens} tokens, read in full.";
+                Status.Message = document.FitsInOnePass
+                    ? $"{document.Name} is attached with {document.Tokens} tokens, read in one pass."
+                    : $"{document.Name} is attached with {document.Tokens} tokens, read in {document.Parts} parts per question.";
             }
             catch (Exception exception)
             {
@@ -306,14 +311,14 @@ namespace OfflineChatBot.ViewModels
             }
         }
 
-        private void RejectDocument(ReadDocument document)
+        private bool ConfirmPartedReading(ReadDocument document)
         {
-            _logger.LogInformation("Refused {DocumentName}, which needs {PartCount} passes", document.Name, document.Parts);
+            if (document.FitsInOnePass)
+                return true;
 
-            _dialogService.ShowInformation(string.Format(TooLargeMessage, document.Name, document.Tokens, document.Parts), "Document too large");
+            _logger.LogInformation("{DocumentName} needs {PartCount} parts per question", document.Name, document.Parts);
 
-            PendingDocumentName = null;
-            Status.Message = "Ready";
+            return _dialogService.Confirm(string.Format(PartedReadingMessage, document.Name, document.Tokens, document.Parts), "This document will be read in parts");
         }
 
         private async Task<string> FindDocumentContextAsync(ChatSession session, string prompt)
@@ -326,9 +331,41 @@ namespace OfflineChatBot.ViewModels
             if (document == null)
                 return string.Empty;
 
-            _logger.LogInformation("Sending {DocumentName} in full with {TokenCount} tokens", document.Name, document.Tokens);
+            if (document.FitsInOnePass)
+            {
+                _logger.LogInformation("Sending {DocumentName} in full with {TokenCount} tokens", document.Name, document.Tokens);
 
-            return document.Text;
+                return document.Text;
+            }
+
+            return await ScanInPartsAsync(document, prompt);
+        }
+
+        private async Task<string> ScanInPartsAsync(ReadDocument document, string prompt)
+        {
+            var progress = new Progress<ScanProgress>(ReportScanProgress);
+            var token = _generationCts!.Token;
+            var notes = await Task.Run(() => _scanner.ScanAsync(document, prompt, progress, token), token);
+
+            Status.Message = "Writing the answer...";
+
+            return notes;
+        }
+
+        private void ReportScanProgress(ScanProgress progress)
+        {
+            Status.Message = $"Reading part {progress.Part} of {progress.TotalParts}{RemainingSuffix(progress.Remaining)}...";
+        }
+
+        private static string RemainingSuffix(TimeSpan remaining)
+        {
+            if (remaining <= TimeSpan.Zero)
+                return string.Empty;
+
+            if (remaining.TotalMinutes < 1)
+                return $", about {remaining.TotalSeconds:F0}s left";
+
+            return $", about {remaining.TotalMinutes:F0} min left";
         }
 
         private async Task<ReadDocument?> EnsureDocumentLoadedAsync(ChatSession session)
@@ -384,7 +421,7 @@ namespace OfflineChatBot.ViewModels
             PendingImagePath = null;
         }
 
-        private async Task GenerateAnswerAsync(ChatMessage answer, string conversationId, List<ChatMessage> history, string prompt, string? imagePath, string documentContext)
+        private async Task GenerateAnswerAsync(ChatMessage answer, ChatSession session, List<ChatMessage> history, string prompt, string? imagePath)
         {
             IsGenerating = true;
 
@@ -392,7 +429,9 @@ namespace OfflineChatBot.ViewModels
 
             try
             {
-                await RequestAnswerAsync(answer, conversationId, history, prompt, imagePath, documentContext);
+                var documentContext = await FindDocumentContextAsync(session, prompt);
+
+                await RequestAnswerAsync(answer, session.Id, history, prompt, imagePath, documentContext);
             }
             catch (OperationCanceledException)
             {

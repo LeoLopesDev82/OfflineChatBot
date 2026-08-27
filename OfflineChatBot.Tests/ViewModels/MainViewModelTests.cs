@@ -208,6 +208,7 @@ namespace OfflineChatBot.Tests.ViewModels
                 var status = new AppStatusViewModel(new FakeResourceMonitor(), llm);
                 var modelsLog = new FakeLogger<ModelManagerViewModel>();
                 var documents = new FakeDocumentReader();
+                var scanner = new FakeDocumentScanner();
                 var documentStore = new FakeDocumentStore();
                 var models = new ModelManagerViewModel(new FakeModelManagerService(), llm, dialogs, status, modelsLog);
                 var viewModel = new MainViewModel(
@@ -217,6 +218,7 @@ namespace OfflineChatBot.Tests.ViewModels
                     new ImmediateUiDispatcher(),
                     new FakeLogger<MainViewModel>(),
                     documents,
+                    scanner,
                     documentStore,
                     models,
                     status);

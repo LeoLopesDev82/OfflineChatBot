@@ -6,6 +6,7 @@ namespace OfflineChatBot.Models
 
         public uint ContextSize { get; set; } = 8192;
         public int MaxTokens { get; set; } = 2048;
+        public int MaxNoteTokens { get; set; } = 256;
         public int MaxHistoryTokens { get; set; } = 2048;
         public bool UseGpu { get; set; } = true;
         public int GpuLayerCount { get; set; } = 99;

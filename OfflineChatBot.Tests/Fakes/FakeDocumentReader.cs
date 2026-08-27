@@ -10,7 +10,11 @@ namespace OfflineChatBot.Tests.Fakes
         public string Text { get; set; } = "The delivery takes thirty days.";
         public int Tokens { get; set; } = 120;
         public int Parts { get; set; } = 1;
+        public bool FitsInOnePass { get; set; } = true;
         public TaskCompletionSource? Gate { get; set; }
+
+        public int RoomPerPass { get; set; } = 4000;
+        public int RoomForAnswer { get; set; } = 4000;
 
         public bool CanRead(string filePath)
         {
@@ -35,7 +39,8 @@ namespace OfflineChatBot.Tests.Fakes
                 Name = name,
                 Text = text,
                 Tokens = Tokens,
-                Parts = Parts
+                Parts = Parts,
+                FitsInOnePass = FitsInOnePass
             };
         }
     }

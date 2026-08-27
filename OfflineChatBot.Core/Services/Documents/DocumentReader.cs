@@ -27,6 +27,10 @@ namespace OfflineChatBot.Services.Documents
             _logger = logger;
         }
 
+        public int RoomPerPass => (int)_options.ContextSize - _options.MaxNoteTokens - ReservedForQuestionAndWrapper;
+
+        public int RoomForAnswer => (int)_options.ContextSize - _options.MaxTokens - ReservedForQuestionAndWrapper;
+
         public bool CanRead(string filePath)
         {
             return _extractor.CanHandle(filePath);
@@ -59,7 +63,8 @@ namespace OfflineChatBot.Services.Documents
                 Name = name,
                 Text = text,
                 Tokens = tokens,
-                Parts = PartsFor(tokens)
+                Parts = PartsFor(tokens),
+                FitsInOnePass = tokens <= RoomForAnswer
             };
         }
 
@@ -67,20 +72,12 @@ namespace OfflineChatBot.Services.Documents
 
         private int PartsFor(int tokens)
         {
-            var room = RoomForDocument;
+            var room = RoomPerPass;
 
             if (room <= 0)
                 return int.MaxValue;
 
             return (tokens + room - 1) / room;
-        }
-
-        private int RoomForDocument
-        {
-            get
-            {
-                return (int)_options.ContextSize - _options.MaxTokens - ReservedForQuestionAndWrapper;
-            }
         }
 
         private static void EnsureReadable(string text, string filePath)

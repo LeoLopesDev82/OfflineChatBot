@@ -49,19 +49,86 @@ namespace OfflineChatBot.Tests.ViewModels
         }
 
         [Fact]
-        public async Task AttachDocument_WhenTheFileNeedsMoreThanOnePass_RefusesAndSaysSo()
+        public async Task AttachDocument_WhenTheFileNeedsSeveralParts_AsksBeforeAccepting()
         {
             var context = await CreateAsync();
 
             context.Reader.Parts = 7;
+            context.Reader.FitsInOnePass = false;
             context.Reader.Tokens = 86000;
+            context.Dialogs.ConfirmResult = true;
+            context.Dialogs.PickedDocument = @"C:\docs\book.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            Assert.Equal(1, context.Dialogs.ConfirmCount);
+            Assert.True(context.ViewModel.HasPendingDocument);
+            Assert.Single(context.DocumentStore.Stored);
+        }
+
+        [Fact]
+        public async Task AttachDocument_WhenTheUserDeclinesThePartedReading_KeepsNoDocument()
+        {
+            var context = await CreateAsync();
+
+            context.Reader.Parts = 7;
+            context.Reader.FitsInOnePass = false;
+            context.Reader.Tokens = 86000;
+            context.Dialogs.ConfirmResult = false;
             context.Dialogs.PickedDocument = @"C:\docs\book.pdf";
 
             await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
 
             Assert.False(context.ViewModel.HasPendingDocument);
             Assert.Empty(context.DocumentStore.Stored);
-            Assert.Contains(context.Dialogs.Information, message => message.Contains("86000"));
+        }
+
+        [Fact]
+        public async Task AttachDocument_WhenTheFileFitsInOnePass_DoesNotAsk()
+        {
+            var context = await CreateAsync();
+
+            context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            Assert.Equal(0, context.Dialogs.ConfirmCount);
+        }
+
+        [Fact]
+        public async Task SendMessage_WithADocumentTooLargeForOnePass_SendsTheNotesFromTheScan()
+        {
+            var context = await CreateAsync();
+
+            context.Reader.Parts = 3;
+            context.Reader.FitsInOnePass = false;
+            context.Dialogs.PickedDocument = @"C:\docs\book.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            context.ViewModel.UserInput = "Who is the narrator?";
+
+            await context.ViewModel.SendMessageCommand.ExecuteAsync(null);
+
+            Assert.Equal(1, context.Scanner.ScanCount);
+            Assert.Equal("Who is the narrator?", context.Scanner.LastQuestion);
+            Assert.Equal(context.Scanner.Notes, context.Llm.LastDocumentContext);
+        }
+
+        [Fact]
+        public async Task SendMessage_WithADocumentThatFits_DoesNotScanInParts()
+        {
+            var context = await CreateAsync();
+
+            context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            context.ViewModel.UserInput = "How long is the delivery?";
+
+            await context.ViewModel.SendMessageCommand.ExecuteAsync(null);
+
+            Assert.Equal(0, context.Scanner.ScanCount);
         }
 
         [Fact]
@@ -184,6 +251,7 @@ namespace OfflineChatBot.Tests.ViewModels
             var llm = new FakeLlmService("Answer");
             var dialogs = new FakeDialogService();
             var reader = new FakeDocumentReader();
+            var scanner = new FakeDocumentScanner();
             var documentStore = new FakeDocumentStore();
             var status = new AppStatusViewModel(new FakeResourceMonitor(), llm);
             var models = new ModelManagerViewModel(new FakeModelManagerService(), llm, dialogs, status, new FakeLogger<ModelManagerViewModel>());
@@ -195,19 +263,21 @@ namespace OfflineChatBot.Tests.ViewModels
                 new ImmediateUiDispatcher(),
                 new FakeLogger<MainViewModel>(),
                 reader,
+                scanner,
                 documentStore,
                 models,
                 status);
 
             await viewModel.InitializeAsync();
 
-            return new TestContext(viewModel, dialogs, reader, documentStore, llm);
+            return new TestContext(viewModel, dialogs, reader, scanner, documentStore, llm);
         }
 
         private sealed record TestContext(
             MainViewModel ViewModel,
             FakeDialogService Dialogs,
             FakeDocumentReader Reader,
+            FakeDocumentScanner Scanner,
             FakeDocumentStore DocumentStore,
             FakeLlmService Llm);
     }

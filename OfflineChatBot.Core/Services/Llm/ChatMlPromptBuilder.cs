@@ -14,6 +14,9 @@ namespace OfflineChatBot.Services.Llm
 
         private const string AssistantOpening = "<|im_start|>assistant\n";
 
+        private const string UnknownLanguageReminder =
+            "\n\n(Write the whole answer in the same language as the question above, whatever language the instructions and the attached material are in.)";
+
         private readonly ITokenCounter _tokenCounter;
         private readonly GenerationOptions _options;
 
@@ -33,13 +36,13 @@ namespace OfflineChatBot.Services.Llm
 
         public string BuildTurn(string userPrompt)
         {
-            return FormatTurn("user", userPrompt) + AssistantOpening;
+            return FormatTurn("user", userPrompt + ReminderFor(userPrompt)) + AssistantOpening;
         }
 
         public PromptResult Build(IEnumerable<ChatMessage> history, string userPrompt, string documentContext = "")
         {
             var opening = FormatTurn("system", SystemPrompt + DocumentBlock(documentContext));
-            var closing = FormatTurn("user", userPrompt) + AssistantOpening;
+            var closing = FormatTurn("user", userPrompt + ReminderFor(userPrompt)) + AssistantOpening;
             var candidates = history.Where(message => message.IsUser || message.IsAssistant).ToList();
 
             var included = SelectWithinBudget(candidates, opening, closing);
@@ -49,6 +52,16 @@ namespace OfflineChatBot.Services.Llm
         }
 
         #region Private Methods
+
+        private static string ReminderFor(string userPrompt)
+        {
+            var language = QuestionLanguage.Of(userPrompt);
+
+            if (language == null)
+                return UnknownLanguageReminder;
+
+            return $"\n\n(Write the whole answer in {language}, whatever language the instructions and the attached material are in.)";
+        }
 
         private List<string> SelectWithinBudget(List<ChatMessage> candidates, string opening, string closing)
         {

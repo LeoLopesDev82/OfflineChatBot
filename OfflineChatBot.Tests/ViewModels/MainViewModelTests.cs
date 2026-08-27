@@ -209,6 +209,7 @@ namespace OfflineChatBot.Tests.ViewModels
                 var modelsLog = new FakeLogger<ModelManagerViewModel>();
                 var documents = new FakeDocumentReader();
                 var scanner = new FakeDocumentScanner();
+                var spreadsheets = new FakeSpreadsheetQueryService();
                 var documentStore = new FakeDocumentStore();
                 var models = new ModelManagerViewModel(new FakeModelManagerService(), llm, dialogs, status, modelsLog);
                 var viewModel = new MainViewModel(
@@ -219,6 +220,7 @@ namespace OfflineChatBot.Tests.ViewModels
                     new FakeLogger<MainViewModel>(),
                     documents,
                     scanner,
+                    spreadsheets,
                     documentStore,
                     models,
                     status);

@@ -190,6 +190,80 @@ namespace OfflineChatBot.Tests.ViewModels
         }
 
         [Fact]
+        public async Task SendMessage_WhenTheQueryAnswers_SendsTheResultAlongsideTheTable()
+        {
+            var context = await CreateAsync();
+
+            context.Spreadsheets.Queryable = true;
+            context.Dialogs.PickedDocument = @"C:\docs\vendas.xlsx";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            context.ViewModel.UserInput = "Qual o total de venda?";
+
+            await context.ViewModel.SendMessageCommand.ExecuteAsync(null);
+
+            Assert.Equal(1, context.Spreadsheets.AskCount);
+            Assert.Equal("Qual o total de venda?", context.Spreadsheets.LastQuestion);
+            Assert.Contains(context.Reader.Text, context.Llm.LastDocumentContext);
+            Assert.Contains(context.Spreadsheets.Result, context.Llm.LastDocumentContext);
+        }
+
+        [Fact]
+        public async Task SendMessage_WhenTheQueryIsRefused_FallsBackToTheRowsWithTheWarning()
+        {
+            var context = await CreateAsync();
+
+            context.Spreadsheets.Queryable = true;
+            context.Spreadsheets.Answered = false;
+            context.Spreadsheets.Result = "No query could be run over the spreadsheet for this question.";
+            context.Dialogs.PickedDocument = @"C:\docs\vendas.xlsx";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            context.ViewModel.UserInput = "Qual o total de venda?";
+
+            await context.ViewModel.SendMessageCommand.ExecuteAsync(null);
+
+            Assert.Contains(context.Reader.Text, context.Llm.LastDocumentContext);
+            Assert.Contains("No query could be run", context.Llm.LastDocumentContext);
+        }
+
+        [Fact]
+        public async Task SendMessage_WithADocumentThatIsNotASpreadsheet_RunsNoQuery()
+        {
+            var context = await CreateAsync();
+
+            context.Spreadsheets.Queryable = false;
+            context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            context.ViewModel.UserInput = "How long is the delivery?";
+
+            await context.ViewModel.SendMessageCommand.ExecuteAsync(null);
+
+            Assert.Equal(0, context.Spreadsheets.AskCount);
+            Assert.Equal(context.Reader.Text, context.Llm.LastDocumentContext);
+        }
+
+        [Fact]
+        public async Task AttachDocument_RemembersWhereTheFileCameFrom()
+        {
+            var context = await CreateAsync();
+
+            context.Dialogs.PickedDocument = @"C:\docs\vendas.xlsx";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            Assert.Equal(@"C:\docs\vendas.xlsx", context.ViewModel.CurrentSession!.DocumentPath);
+
+            await context.ViewModel.RemoveAttachedDocumentCommand.ExecuteAsync(null);
+
+            Assert.Null(context.ViewModel.CurrentSession.DocumentPath);
+        }
+
+        [Fact]
         public async Task SendMessage_SendsTheConversationIdentity()
         {
             var context = await CreateAsync();
@@ -252,6 +326,7 @@ namespace OfflineChatBot.Tests.ViewModels
             var dialogs = new FakeDialogService();
             var reader = new FakeDocumentReader();
             var scanner = new FakeDocumentScanner();
+            var spreadsheets = new FakeSpreadsheetQueryService();
             var documentStore = new FakeDocumentStore();
             var status = new AppStatusViewModel(new FakeResourceMonitor(), llm);
             var models = new ModelManagerViewModel(new FakeModelManagerService(), llm, dialogs, status, new FakeLogger<ModelManagerViewModel>());
@@ -264,13 +339,14 @@ namespace OfflineChatBot.Tests.ViewModels
                 new FakeLogger<MainViewModel>(),
                 reader,
                 scanner,
+                spreadsheets,
                 documentStore,
                 models,
                 status);
 
             await viewModel.InitializeAsync();
 
-            return new TestContext(viewModel, dialogs, reader, scanner, documentStore, llm);
+            return new TestContext(viewModel, dialogs, reader, scanner, spreadsheets, documentStore, llm);
         }
 
         private sealed record TestContext(
@@ -278,6 +354,7 @@ namespace OfflineChatBot.Tests.ViewModels
             FakeDialogService Dialogs,
             FakeDocumentReader Reader,
             FakeDocumentScanner Scanner,
+            FakeSpreadsheetQueryService Spreadsheets,
             FakeDocumentStore DocumentStore,
             FakeLlmService Llm);
     }

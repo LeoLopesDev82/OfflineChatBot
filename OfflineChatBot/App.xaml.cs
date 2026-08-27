@@ -115,15 +115,25 @@ namespace OfflineChatBot
             services.AddSingleton<IModelManagerService, ModelManagerService>();
             services.AddSingleton<IChatStorageService, ChatStorageService>();
             services.AddSingleton<IDocumentStore, DocumentStore>();
-            services.AddSingleton<IDocumentTextExtractor>(_ => new CompositeTextExtractor(
+            services.AddSingleton<WorkbookReader>();
+            services.AddSingleton<BlockDetector>();
+            services.AddSingleton<SpreadsheetProfiler>();
+            services.AddSingleton<SpreadsheetSummary>();
+            services.AddSingleton<IDocumentTextExtractor>(provider => new CompositeTextExtractor(
             [
                 new PlainTextExtractor(),
                 new PdfTextExtractor(),
-                new WordTextExtractor()
+                new WordTextExtractor(),
+                new SpreadsheetTextExtractor(
+                    provider.GetRequiredService<WorkbookReader>(),
+                    provider.GetRequiredService<BlockDetector>(),
+                    provider.GetRequiredService<SpreadsheetSummary>())
             ]));
             services.AddSingleton<TextSplitter>();
             services.AddSingleton<IDocumentReader, DocumentReader>();
             services.AddSingleton<IDocumentScanner, DocumentScanner>();
+            services.AddSingleton<QueryRunner>();
+            services.AddSingleton<ISpreadsheetQueryService, SpreadsheetQueryService>();
             services.AddSingleton<IDialogService, DialogService>();
             services.AddSingleton<IResourceMonitor, ProcessResourceMonitor>();
             services.AddSingleton<IUiDispatcher, WpfUiDispatcher>();

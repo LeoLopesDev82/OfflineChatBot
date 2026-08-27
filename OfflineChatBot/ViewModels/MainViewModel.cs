@@ -21,6 +21,7 @@ namespace OfflineChatBot.ViewModels
         private readonly ILogger<MainViewModel> _logger;
         private readonly IDocumentReader _reader;
         private readonly IDocumentScanner _scanner;
+        private readonly ISpreadsheetQueryService _spreadsheets;
         private readonly IDocumentStore _documentStore;
 
         private CancellationTokenSource? _generationCts;
@@ -59,6 +60,7 @@ namespace OfflineChatBot.ViewModels
             ILogger<MainViewModel> logger,
             IDocumentReader reader,
             IDocumentScanner scanner,
+            ISpreadsheetQueryService spreadsheets,
             IDocumentStore documentStore,
             ModelManagerViewModel models,
             AppStatusViewModel status)
@@ -70,6 +72,7 @@ namespace OfflineChatBot.ViewModels
             _logger = logger;
             _reader = reader;
             _scanner = scanner;
+            _spreadsheets = spreadsheets;
             _documentStore = documentStore;
 
             Models = models;
@@ -198,6 +201,7 @@ namespace OfflineChatBot.ViewModels
             await _documentStore.DeleteAsync(session.Id);
 
             session.DocumentName = null;
+            session.DocumentPath = null;
             _activeDocument = null;
             PendingDocumentName = null;
 
@@ -289,6 +293,7 @@ namespace OfflineChatBot.ViewModels
                 _activeDocument = document;
 
                 session.DocumentName = document.Name;
+                session.DocumentPath = filePath;
                 PendingDocumentName = document.Name;
 
                 Status.Message = document.FitsInOnePass
@@ -321,7 +326,7 @@ namespace OfflineChatBot.ViewModels
             return _dialogService.Confirm(string.Format(PartedReadingMessage, document.Name, document.Tokens, document.Parts), "This document will be read in parts");
         }
 
-        private async Task<string> FindDocumentContextAsync(ChatSession session, string prompt)
+        private async Task<string> FindDocumentContextAsync(ChatSession session, string prompt, string refusal)
         {
             if (session.DocumentName == null)
                 return string.Empty;
@@ -335,10 +340,25 @@ namespace OfflineChatBot.ViewModels
             {
                 _logger.LogInformation("Sending {DocumentName} in full with {TokenCount} tokens", document.Name, document.Tokens);
 
-                return document.Text;
+                return Join(document.Text, refusal);
             }
 
-            return await ScanInPartsAsync(document, prompt);
+            return Join(await ScanInPartsAsync(document, prompt), refusal);
+        }
+
+        private async Task<QueryOutcome> QuerySpreadsheetAsync(ChatSession session, string prompt)
+        {
+            if (!_spreadsheets.CanQuery(session.DocumentPath))
+                return new QueryOutcome(false, string.Empty);
+
+            Status.Message = "Querying the spreadsheet...";
+
+            return await Task.Run(() => _spreadsheets.AskAsync(session.DocumentPath!, prompt, _generationCts!.Token), _generationCts!.Token);
+        }
+
+        private static string Join(string document, string queried)
+        {
+            return queried.Length == 0 ? document : $"{document}\n\n{queried}";
         }
 
         private async Task<string> ScanInPartsAsync(ReadDocument document, string prompt)
@@ -429,7 +449,8 @@ namespace OfflineChatBot.ViewModels
 
             try
             {
-                var documentContext = await FindDocumentContextAsync(session, prompt);
+                var queried = await QuerySpreadsheetAsync(session, prompt);
+                var documentContext = await FindDocumentContextAsync(session, prompt, queried.Text);
 
                 await RequestAnswerAsync(answer, session.Id, history, prompt, imagePath, documentContext);
             }

@@ -20,6 +20,7 @@ namespace OfflineChatBot.Models
         public string Id { get; set; } = Guid.NewGuid().ToString();
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public string? DocumentName { get; set; }
+        public string? DocumentPath { get; set; }
 
         public ObservableCollection<ChatMessage> Messages { get; set; } = new ObservableCollection<ChatMessage>();
 

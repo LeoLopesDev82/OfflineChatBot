@@ -11,6 +11,7 @@ The core objective of this repository is to showcase software engineering practi
 * **Local Inference Engine:** Executes `.gguf` quantized models locally.
 * **GPU Acceleration:** Offloads model layers to the GPU through the Vulkan backend, falling back to the CPU automatically when no compatible device is available or when the model does not fit in video memory.
 * **Document Question Answering:** Reads PDF, Word and text files and puts the whole text in front of the model, so an answer is never limited to the fragments a search happened to pick. The conversation context is kept loaded between messages, so the document is read once and every question after the first is answered immediately.
+* **Spreadsheet Question Answering:** Reads `.xlsx` files, finds the tables inside a sheet rather than assuming one starts at A1, and computes every figure in C# so no total ever comes out of the model.
 * **Context Budgeting:** Counts real tokens with the model tokenizer and trims the oldest turns to fit the context window, reserving room for the answer instead of guessing with a fixed message count.
 * **Vision Support:** Runs multimodal models (LLaVA 1.5 7B) to interpret images attached to the chat, handling the multimodal projection weights and per-turn media state.
 * **Integrated Model Manager:** Includes an asynchronous download manager to fetch HuggingFace models directly from the UI, with proper stream handling and progress reporting.
@@ -84,8 +85,20 @@ A file larger than the context window is not turned away and is never cut down t
 How expensive that is depends entirely on the hardware, and the difference is not subtle. On the GeForce GTX 1050 Ti this was built on, a seventy six thousand token novel is read in eleven parts and takes about fourteen minutes for every question asked. The same work on a card able to hold a long context model needs no parts at all: the novel fits in a single pass, the conversation context keeps it loaded, and every question after the first is answered immediately. The technique is the fallback for when the document does not fit, not the path a capable machine takes.
 The previous version of this feature searched the document instead of reading it, embedding passages and retrieving the closest ones to each question. It was measured, it worked as designed, and it was still replaced: retrieving four passages of a book puts under one percent of it in front of the model, so questions that need the whole picture came back wrong no matter which chat model answered them. Identical bad answers across different models is what pointed at the context rather than the model.
 
-Scanned PDFs have no text layer and are rejected with an explanation, since character recognition is not supported. The legacy binary `.doc` format and spreadsheets are out of scope: tabular data needs aggregation or querying rather than being read as prose.
+Scanned PDFs have no text layer and are rejected with an explanation, since character recognition is not supported. The legacy binary `.doc` format is out of scope.
 
+
+## 📊 Talking to a Spreadsheet
+
+A spreadsheet is not prose, and reading it as prose fails in two ways: a language model cannot be trusted to add up a column, and a real sheet is rarely one clean table starting at A1. Both problems are handled in code before the model sees anything.
+
+The sheet is read cell by cell, including merged ranges, and the tables inside it are found by looking for islands of filled cells. A merged banner across the width is a title, a merged strip above a denser row is a group header, a blank row separates one table from the next, and a short trailing row offset to the right is a totals row that must be kept out of the data. These rules were written against real files: the two spreadsheets used to develop this both had a title above the data, and one had a two level header where the real column names sit on the third row. Duplicate column names are disambiguated with their column letter, so a sheet with two columns called the same thing does not contradict itself.
+
+Each table is then profiled in C#: the type of every column, and the sum, average and range of the numeric ones, counting only the values that really are numbers. A column holding both amounts and the word "presente" reports how many of its cells were numeric, so a total is never quietly computed over a subset that looks like the whole.
+
+The model receives that profile and the sheet as a tab separated table. When a question can be answered by a query, the model writes one as a small JSON object, C# runs it over the file, and the result is handed back for the model to phrase. Column names must match exactly or the query is refused, a condition naming a value no row holds is refused rather than answered with zero, and an ambiguous column name comes back asking which one was meant. Nothing is guessed: the answer is either computed from the file or the application says it cannot work it out.
+
+Reading a table is where a small model struggles most, and it struggles in a particular way: it takes a value from one row and reports it under another. Both a 3B and a 7B model did this on the same file. That is the reason every figure is computed in code rather than read out of the table by the model, and the reason a query that cannot be validated is refused instead of answered.
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -99,9 +112,10 @@ Scanned PDFs have no text layer and are rejected with an explanation, since char
    ```
 2. Open the solution in Visual Studio.
 3. Build and Run the project.
-6. To ask questions about a document, attach a PDF, Word or text file through the composer. No extra model is needed, and the file is read in full.
+4. On the first launch, open the **Model Manager** to download a Qwen 2.5 model. The larger the model, the better it reads tables and long documents.
 5. To analyze images, download **LLaVA 1.5 7B (Vision & Chat)** in the Model Manager, select it as the active model, and attach an image through the composer.
-6. To ask questions about a document, download **EmbeddingGemma 300M (Document Search)** in the Model Manager, then attach a PDF, Word or text file through the composer. It is indexed once and stays available for that conversation.
+6. To ask questions about a document, attach a PDF, Word or text file through the composer. No extra model is needed, and the file is read in full.
+7. To ask questions about a spreadsheet, attach an `.xlsx` file. Its tables are found and profiled in code, and any figure you ask for is computed from the file rather than written by the model.
 
 ## 🗺️ Roadmap & Future Implementation
 
@@ -110,7 +124,7 @@ The architecture was designed to be extended. Delivered and upcoming milestones:
 - [x] **Vision Models:** Support for Vision-Language Models (VLMs), allowing users to attach images to the chat for context-aware interactions.
 - [x] **Document Analysis:** Reading PDF, Word and text files in full, with the conversation context kept loaded so the document is processed once.
 - [x] **Reading Long Documents in Parts:** Putting the question to every part of a file that does not fit the context window, so size costs time rather than accuracy.
-- [ ] **Spreadsheet Analysis:** Answering questions over tabular data through aggregation and querying instead of reading it as prose.
+- [x] **Spreadsheet Analysis:** Reading `.xlsx` files, with the structure of each sheet detected and every figure computed in code.
 - [x] **Hardware Acceleration:** GPU offloading through the Vulkan backend, toggleable at runtime, with automatic fallback to the CPU.
 
 ## ⚙️ Technology Stack

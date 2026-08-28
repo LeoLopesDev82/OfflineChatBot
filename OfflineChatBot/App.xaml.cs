@@ -134,6 +134,7 @@ namespace OfflineChatBot
             services.AddSingleton<IDocumentScanner, DocumentScanner>();
             services.AddSingleton<QueryRunner>();
             services.AddSingleton<ISpreadsheetQueryService, SpreadsheetQueryService>();
+            services.AddSingleton<IQuestionRouter, QuestionRouter>();
             services.AddSingleton<IDialogService, DialogService>();
             services.AddSingleton<IResourceMonitor, ProcessResourceMonitor>();
             services.AddSingleton<IUiDispatcher, WpfUiDispatcher>();

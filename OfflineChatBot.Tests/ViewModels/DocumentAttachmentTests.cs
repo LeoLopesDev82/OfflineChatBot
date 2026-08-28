@@ -84,6 +84,55 @@ namespace OfflineChatBot.Tests.ViewModels
         }
 
         [Fact]
+        public async Task AttachDocument_OverAnotherOne_AsksBeforeReplacingIt()
+        {
+            var context = await CreateAsync();
+
+            context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            context.Dialogs.ConfirmResult = true;
+            context.Dialogs.PickedDocument = @"C:\docs\invoice.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            Assert.Equal(1, context.Dialogs.ConfirmCount);
+            Assert.Equal("invoice.pdf", context.ViewModel.PendingDocumentName);
+        }
+
+        [Fact]
+        public async Task AttachDocument_WhenTheReplacementIsDeclined_KeepsTheFirstOne()
+        {
+            var context = await CreateAsync();
+
+            context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            context.Dialogs.ConfirmResult = false;
+            context.Dialogs.PickedDocument = @"C:\docs\invoice.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            Assert.Equal("contract.pdf", context.ViewModel.CurrentSession!.DocumentName);
+            Assert.Equal(@"C:\docs\contract.pdf", context.ViewModel.CurrentSession.DocumentPath);
+        }
+
+        [Fact]
+        public async Task AttachDocument_WithTheSameFileAgain_DoesNotAsk()
+        {
+            var context = await CreateAsync();
+
+            context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            Assert.Equal(0, context.Dialogs.ConfirmCount);
+        }
+
+        [Fact]
         public async Task AttachDocument_WhenTheFileFitsInOnePass_DoesNotAsk()
         {
             var context = await CreateAsync();
@@ -113,6 +162,64 @@ namespace OfflineChatBot.Tests.ViewModels
             Assert.Equal(1, context.Scanner.ScanCount);
             Assert.Equal("Who is the narrator?", context.Scanner.LastQuestion);
             Assert.Equal(context.Scanner.Notes, context.Llm.LastDocumentContext);
+        }
+
+        [Fact]
+        public async Task SendMessage_WhenTheMessageIsNotAboutTheBigFile_SkipsTheScanEntirely()
+        {
+            var context = await CreateAsync();
+
+            context.Reader.Parts = 7;
+            context.Reader.FitsInOnePass = false;
+            context.Dialogs.PickedDocument = @"C:\docs\book.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            context.Router.Needed = false;
+            context.ViewModel.UserInput = "obrigado!";
+
+            await context.ViewModel.SendMessageCommand.ExecuteAsync(null);
+
+            Assert.Equal(1, context.Router.AskCount);
+            Assert.Equal("obrigado!", context.Router.LastQuestion);
+            Assert.Equal(0, context.Scanner.ScanCount);
+            Assert.Equal(string.Empty, context.Llm.LastDocumentContext);
+        }
+
+        [Fact]
+        public async Task SendMessage_WhenTheMessageIsNotAboutTheSpreadsheet_RunsNoQueryButKeepsTheTable()
+        {
+            var context = await CreateAsync();
+
+            context.Spreadsheets.Queryable = true;
+            context.Dialogs.PickedDocument = @"C:\docs\vendas.xlsx";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            context.Router.Needed = false;
+            context.ViewModel.UserInput = "obrigado!";
+
+            await context.ViewModel.SendMessageCommand.ExecuteAsync(null);
+
+            Assert.Equal(0, context.Spreadsheets.AskCount);
+            Assert.Equal(context.Reader.Text, context.Llm.LastDocumentContext);
+        }
+
+        [Fact]
+        public async Task SendMessage_WithAnOrdinaryDocumentThatFits_DoesNotBotherRouting()
+        {
+            var context = await CreateAsync();
+
+            context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            context.ViewModel.UserInput = "obrigado!";
+
+            await context.ViewModel.SendMessageCommand.ExecuteAsync(null);
+
+            Assert.Equal(0, context.Router.AskCount);
+            Assert.Equal(context.Reader.Text, context.Llm.LastDocumentContext);
         }
 
         [Fact]
@@ -327,6 +434,7 @@ namespace OfflineChatBot.Tests.ViewModels
             var reader = new FakeDocumentReader();
             var scanner = new FakeDocumentScanner();
             var spreadsheets = new FakeSpreadsheetQueryService();
+            var router = new FakeQuestionRouter();
             var documentStore = new FakeDocumentStore();
             var status = new AppStatusViewModel(new FakeResourceMonitor(), llm);
             var models = new ModelManagerViewModel(new FakeModelManagerService(), llm, dialogs, status, new FakeLogger<ModelManagerViewModel>());
@@ -340,13 +448,14 @@ namespace OfflineChatBot.Tests.ViewModels
                 reader,
                 scanner,
                 spreadsheets,
+                router,
                 documentStore,
                 models,
                 status);
 
             await viewModel.InitializeAsync();
 
-            return new TestContext(viewModel, dialogs, reader, scanner, spreadsheets, documentStore, llm);
+            return new TestContext(viewModel, dialogs, reader, scanner, spreadsheets, router, documentStore, llm);
         }
 
         private sealed record TestContext(
@@ -355,6 +464,7 @@ namespace OfflineChatBot.Tests.ViewModels
             FakeDocumentReader Reader,
             FakeDocumentScanner Scanner,
             FakeSpreadsheetQueryService Spreadsheets,
+            FakeQuestionRouter Router,
             FakeDocumentStore DocumentStore,
             FakeLlmService Llm);
     }

@@ -12,16 +12,18 @@ namespace OfflineChatBot.Tests.Fakes
         public int ConfirmCount { get; private set; }
         public int ModelManagerCount { get; private set; }
 
-        public void ShowInformation(string message, string caption)
+        public Task ShowInformationAsync(string message, string caption)
         {
             Information.Add(message);
+
+            return Task.CompletedTask;
         }
 
-        public bool Confirm(string message, string caption)
+        public Task<bool> ConfirmAsync(string message, string caption)
         {
             ConfirmCount++;
 
-            return ConfirmResult;
+            return Task.FromResult(ConfirmResult);
         }
 
         public string? PickImageFile()

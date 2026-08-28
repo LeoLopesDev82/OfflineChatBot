@@ -222,5 +222,6 @@
             </ItemsControl>
         </ScrollViewer>
         </Grid>
+        <local:DialogHost x:Name="Dialogs" Grid.Row="0" Grid.RowSpan="2"/>
     </Grid>
 </local:ChromelessWindow>

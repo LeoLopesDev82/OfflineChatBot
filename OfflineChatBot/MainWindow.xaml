@@ -761,5 +761,6 @@
             </Border>
         </Grid>
         </Grid>
+        <views:DialogHost x:Name="Dialogs" Grid.Row="0" Grid.RowSpan="2"/>
     </Grid>
 </views:ChromelessWindow>

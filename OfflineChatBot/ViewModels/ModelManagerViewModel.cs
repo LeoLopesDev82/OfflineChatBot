@@ -144,7 +144,7 @@ namespace OfflineChatBot.ViewModels
 
             if (pendingModels.Count == 0)
             {
-                _dialogService.ShowInformation("All available models are already downloaded!", "Model Manager");
+                await _dialogService.ShowInformationAsync("All available models are already downloaded!", "Model Manager");
 
                 return;
             }
@@ -170,7 +170,7 @@ namespace OfflineChatBot.ViewModels
             if (model == null)
                 return;
 
-            if (!_dialogService.Confirm($"Are you sure you want to delete the model file for {model.Name}?", "Confirm Deletion"))
+            if (!await _dialogService.ConfirmAsync($"Are you sure you want to delete the model file for {model.Name}?", "Confirm Deletion"))
                 return;
 
             await ReleaseModelIfActiveAsync(model);

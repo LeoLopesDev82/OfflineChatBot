@@ -124,22 +124,33 @@ Reading a table is where a small model struggles most, and it struggles in a par
    ```bash
    git clone https://github.com/LeoLopesDev82/OfflineChatBot.git
    ```
-2. Open the solution in Visual Studio.
-3. Build and Run the project.
-4. On the first launch, open the **Model Manager** to download a Qwen 2.5 model. The larger the model, the better it reads tables and long documents.
-5. To analyze images, download **LLaVA 1.5 7B (Vision & Chat)** in the Model Manager, select it as the active model, and attach an image through the composer.
-6. To ask questions about a document, attach a PDF, Word or text file through the composer. No extra model is needed, and the file is read in full.
-7. To ask questions about a spreadsheet, attach an `.xlsx` file. Its tables are found and profiled in code, and any figure you ask for is computed from the file rather than written by the model.
+2. Build and run it, either from Visual Studio by opening `OfflineChatBot.sln`, or from the command line:
+   ```bash
+   dotnet run --project OfflineChatBot -c Release
+   ```
+3. On the first launch, open the **Model Manager** to download a Qwen 2.5 model. The larger the model, the better it reads tables and long documents.
+4. To analyze images, download **LLaVA 1.5 7B (Vision & Chat)** in the Model Manager, select it as the active model, and attach an image through the composer.
+5. To ask questions about a document, attach a PDF, Word or text file through the composer. No extra model is needed, and the file is read in full.
+6. To ask questions about a spreadsheet, attach an `.xlsx` file. Its tables are found and profiled in code, and any figure you ask for is computed from the file rather than written by the model.
 
-## 🗺️ Roadmap & Future Implementation
+## 🗺️ Roadmap
 
-The architecture was designed to be extended. Delivered and upcoming milestones:
+The architecture was designed to be extended.
+
+**Delivered**
 
 - [x] **Vision Models:** Support for Vision-Language Models (VLMs), allowing users to attach images to the chat for context-aware interactions.
 - [x] **Document Analysis:** Reading PDF, Word and text files in full, with the conversation context kept loaded so the document is processed once.
 - [x] **Reading Long Documents in Parts:** Putting the question to every part of a file that does not fit the context window, so size costs time rather than accuracy.
 - [x] **Spreadsheet Analysis:** Reading `.xlsx` files, with the structure of each sheet detected and every figure computed in code.
 - [x] **Hardware Acceleration:** GPU offloading through the Vulkan backend, toggleable at runtime, with automatic fallback to the CPU.
+- [x] **Prompt Format per Model:** Talking to each model in the template it was trained on, since a vision model and an instruct model do not share one.
+
+**Next**
+
+- [ ] **Looking Things Up:** Consulting the internet when a question needs current information, with the model deciding in the background whether external context is needed.
+- [ ] **A Stronger Vision Model:** Moving to LLaVA 1.6 or Qwen2-VL once LLamaSharp supports them, since 1.5 is the weakest link in the image path.
+- [ ] **Splitting the Chat View Model:** Extracting the document orchestration out of `MainViewModel`, which has grown past what one class should own.
 
 ## ⚙️ Technology Stack
 * **Language:** C# 13 / .NET 9.0

@@ -567,7 +567,7 @@
                                         </Border>
 
                                         <!-- Attached Image in Bubble -->
-                                        <Image Source="{Binding AttachedImagePath}"
+                                        <Image Source="{Binding AttachedImagePath, TargetNullValue={x:Null}}"
                                                Visibility="{Binding HasImage, Converter={StaticResource BoolToVisConverter}}"
                                                MaxWidth="400" MaxHeight="300"
                                                Stretch="Uniform"
@@ -668,7 +668,7 @@
                             <Border Visibility="{Binding HasPendingImage, Converter={StaticResource BoolToVisConverter}}"
                                     CornerRadius="8" Background="{StaticResource BgCardBrush}" Padding="4" Margin="0,0,8,0">
                                 <StackPanel Orientation="Horizontal">
-                                    <Image Source="{Binding PendingImagePath}" MaxHeight="60" MaxWidth="100" Stretch="Uniform" Margin="0,0,8,0"/>
+                                    <Image Source="{Binding PendingImagePath, TargetNullValue={x:Null}}" MaxHeight="60" MaxWidth="100" Stretch="Uniform" Margin="0,0,8,0"/>
                                     <TextBlock Text="Image attached" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                     <Button Background="Transparent" BorderThickness="0" Command="{Binding RemoveAttachedImageCommand}" ToolTip="Remove image">
                                         <iconPacks:PackIconBootstrapIcons Kind="X" Width="16" Height="16" Foreground="{StaticResource TextSecondaryBrush}"/>

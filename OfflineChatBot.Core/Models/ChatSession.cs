@@ -58,6 +58,21 @@ namespace OfflineChatBot.Models
             });
         }
 
+        public ChatSession Snapshot()
+        {
+            return new ChatSession
+            {
+                Id = Id,
+                Title = Title,
+                CreatedAt = CreatedAt,
+                DocumentName = DocumentName,
+                DocumentPath = DocumentPath,
+                DocumentTokens = DocumentTokens,
+                DocumentParts = DocumentParts,
+                Messages = new ObservableCollection<ChatMessage>(Messages)
+            };
+        }
+
         #region Private Methods
 
         private ChatMessage AddMessage(ChatMessage message)

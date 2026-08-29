@@ -184,6 +184,41 @@ namespace OfflineChatBot.Tests.ViewModels
             Assert.Equal("model file is corrupt", logged.Exception!.Message);
         }
 
+        [Fact]
+        public async Task SaveSessions_NeverRunsTwoSavesAtTheSameTime()
+        {
+            var context = await TestContext.CreateAsync("Answer");
+
+            var before = context.Storage.EnteredSaves;
+
+            context.Storage.Gate = new TaskCompletionSource();
+
+            context.ViewModel.CreateNewChatCommand.Execute(null);
+            context.ViewModel.CreateNewChatCommand.Execute(null);
+
+            Assert.Equal(before + 1, context.Storage.EnteredSaves);
+            Assert.Equal(1, context.Storage.MaxConcurrentSaves);
+
+            context.Storage.Gate.SetResult();
+            context.Storage.Gate = null;
+        }
+
+        [Fact]
+        public async Task SaveSessions_HandsStorageACopyThatLaterMessagesCannotChange()
+        {
+            var context = await TestContext.CreateAsync("Answer");
+
+            context.ViewModel.CreateNewChatCommand.Execute(null);
+
+            var session = context.ViewModel.CurrentSession!;
+            var saved = context.Storage.Stored.First(stored => stored.Id == session.Id);
+
+            session.AddUserMessage("A question arriving after the save", null, null);
+
+            Assert.NotSame(session, saved);
+            Assert.Empty(saved.Messages);
+        }
+
         private sealed class TestContext
         {
             public required MainViewModel ViewModel { get; init; }

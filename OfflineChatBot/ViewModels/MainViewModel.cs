@@ -26,6 +26,7 @@ namespace OfflineChatBot.ViewModels
         private readonly ISpreadsheetQueryService _spreadsheets;
         private readonly IQuestionRouter _router;
         private readonly IDocumentStore _documentStore;
+        private readonly SemaphoreSlim _saveLock = new SemaphoreSlim(1, 1);
 
         private CancellationTokenSource? _generationCts;
         private ReadDocument? _activeDocument;
@@ -584,19 +585,27 @@ namespace OfflineChatBot.ViewModels
 
         private void SaveSessions()
         {
-            var snapshot = Sessions.ToList();
+            var snapshot = Sessions.Select(session => session.Snapshot()).ToList();
 
-            _ = Task.Run(async () =>
+            _ = SaveSnapshotAsync(snapshot);
+        }
+
+        private async Task SaveSnapshotAsync(List<ChatSession> snapshot)
+        {
+            await _saveLock.WaitAsync();
+
+            try
             {
-                try
-                {
-                    await _chatStorage.SaveSessionsAsync(snapshot);
-                }
-                catch (Exception exception)
-                {
-                    _logger.LogError(exception, "Could not save the chat history");
-                }
-            });
+                await _chatStorage.SaveSessionsAsync(snapshot);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception, "Could not save the chat history");
+            }
+            finally
+            {
+                _saveLock.Release();
+            }
         }
 
         #endregion

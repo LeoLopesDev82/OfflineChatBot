@@ -21,6 +21,8 @@ namespace OfflineChatBot.Models
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public string? DocumentName { get; set; }
         public string? DocumentPath { get; set; }
+        public int DocumentTokens { get; set; }
+        public int DocumentParts { get; set; }
 
         public ObservableCollection<ChatMessage> Messages { get; set; } = new ObservableCollection<ChatMessage>();
 

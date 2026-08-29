@@ -412,6 +412,64 @@ namespace OfflineChatBot.Tests.ViewModels
         }
 
         [Fact]
+        public async Task AttachDocument_ShowsTheSizeOfAFileReadInOnePass()
+        {
+            var context = await CreateAsync();
+
+            context.Reader.Tokens = 1840;
+            context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            Assert.True(context.ViewModel.HasActiveDocument);
+            Assert.Equal("contract.pdf · 1,840 tokens · read in one pass", context.ViewModel.ActiveDocumentSummary);
+        }
+
+        [Fact]
+        public async Task AttachDocument_ShowsHowManyPartsAFileCostsOnEveryQuestion()
+        {
+            var context = await CreateAsync();
+
+            context.Reader.Tokens = 75700;
+            context.Reader.Parts = 11;
+            context.Reader.FitsInOnePass = false;
+            context.Dialogs.PickedDocument = @"C:\docs\book.docx";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            Assert.Equal("book.docx · 75,700 tokens · read in 11 parts on every question", context.ViewModel.ActiveDocumentSummary);
+        }
+
+        [Fact]
+        public async Task RemoveAttachedDocument_TakesTheSizeIndicatorAway()
+        {
+            var context = await CreateAsync();
+
+            context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+            await context.ViewModel.RemoveAttachedDocumentCommand.ExecuteAsync(null);
+
+            Assert.False(context.ViewModel.HasActiveDocument);
+            Assert.Equal(string.Empty, context.ViewModel.ActiveDocumentSummary);
+        }
+
+        [Fact]
+        public async Task CreateNewChat_LeavesTheSizeIndicatorBehindWithTheOldChat()
+        {
+            var context = await CreateAsync();
+
+            context.Dialogs.PickedDocument = @"C:\docs\contract.pdf";
+
+            await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
+
+            context.ViewModel.CreateNewChatCommand.Execute(null);
+
+            Assert.False(context.ViewModel.HasActiveDocument);
+            Assert.Equal(string.Empty, context.ViewModel.ActiveDocumentSummary);
+        }
+
+        [Fact]
         public async Task DeleteChat_AlsoErasesTheDocumentOfThatChat()
         {
             var context = await CreateAsync();

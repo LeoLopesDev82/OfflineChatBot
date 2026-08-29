@@ -621,6 +621,24 @@
                     BorderBrush="{StaticResource BorderBrush}"
                     BorderThickness="0,1,0,0"
                     Padding="20,14">
+                <StackPanel>
+                    <Border Visibility="{Binding HasActiveDocument, Converter={StaticResource BoolToVisConverter}}"
+                            Margin="4,0,4,8"
+                            Padding="10,5"
+                            CornerRadius="8"
+                            HorizontalAlignment="Left"
+                            Background="{StaticResource BgCardBrush}">
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconBootstrapIcons Kind="Paperclip" Width="12" Height="12"
+                                                              Foreground="{StaticResource TextSecondaryBrush}"
+                                                              VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="{Binding ActiveDocumentSummary}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="11"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
                 <Border Background="{StaticResource BgInputBrush}"
                         BorderBrush="{StaticResource BorderBrush}"
                         BorderThickness="1"
@@ -758,6 +776,7 @@
                         </StackPanel>
                     </Grid>
                 </Border>
+                </StackPanel>
             </Border>
         </Grid>
         </Grid>

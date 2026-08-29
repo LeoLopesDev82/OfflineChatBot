@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.IO;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using OfflineChatBot.Models;
 using OfflineChatBot.Services.Abstractions;
@@ -91,6 +92,10 @@ namespace OfflineChatBot.ViewModels
         public bool HasPendingDocument => !string.IsNullOrEmpty(PendingDocumentName);
 
         public bool HasOpenRename => Sessions.Any(session => session.IsEditing);
+
+        public bool HasActiveDocument => CurrentSession?.DocumentName != null;
+
+        public string ActiveDocumentSummary => DescribeActiveDocument();
 
         public async Task InitializeAsync()
         {
@@ -211,8 +216,12 @@ namespace OfflineChatBot.ViewModels
 
             session.DocumentName = null;
             session.DocumentPath = null;
+            session.DocumentTokens = 0;
+            session.DocumentParts = 0;
             _activeDocument = null;
             PendingDocumentName = null;
+
+            NotifyActiveDocument();
 
             SaveSessions();
         }
@@ -253,11 +262,36 @@ namespace OfflineChatBot.ViewModels
         {
             _activeDocument = null;
             PendingDocumentName = null;
+
+            NotifyActiveDocument();
         }
 
         #region Private Methods
 
         private bool IsIdle() => !IsReadingDocument;
+
+        private void NotifyActiveDocument()
+        {
+            OnPropertyChanged(nameof(HasActiveDocument));
+            OnPropertyChanged(nameof(ActiveDocumentSummary));
+        }
+
+        private string DescribeActiveDocument()
+        {
+            var session = CurrentSession;
+
+            if (session?.DocumentName == null)
+                return string.Empty;
+
+            if (session.DocumentTokens == 0)
+                return session.DocumentName;
+
+            var size = $"{session.DocumentName} · {session.DocumentTokens.ToString("N0", CultureInfo.InvariantCulture)} tokens";
+
+            return session.DocumentParts > 1
+                ? $"{size} · read in {session.DocumentParts} parts on every question"
+                : $"{size} · read in one pass";
+        }
 
         private async Task LoadSessionsAsync()
         {
@@ -303,7 +337,11 @@ namespace OfflineChatBot.ViewModels
 
                 session.DocumentName = document.Name;
                 session.DocumentPath = filePath;
+                session.DocumentTokens = document.Tokens;
+                session.DocumentParts = document.Parts;
                 PendingDocumentName = document.Name;
+
+                NotifyActiveDocument();
 
                 Status.Message = document.FitsInOnePass
                     ? $"{document.Name} is attached with {document.Tokens} tokens, read in one pass."

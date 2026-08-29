@@ -17,7 +17,8 @@ namespace OfflineChatBot.Services.Llm
 
         private readonly GenerationOptions _options;
         private readonly ILogger<LlamaSharpService> _logger;
-        private readonly ChatMlPromptBuilder _promptBuilder;
+        private PromptBuilder _promptBuilder;
+        private PromptFormat _format = PromptFormat.ChatMl;
         private readonly ConversationTracker _tracker;
         private readonly SemaphoreSlim _loadLock = new SemaphoreSlim(1, 1);
 
@@ -32,7 +33,7 @@ namespace OfflineChatBot.Services.Llm
         {
             _options = options.Value;
             _logger = logger;
-            _promptBuilder = new ChatMlPromptBuilder(this, _options);
+            _promptBuilder = new PromptBuilder(this, _options, _format);
             _tracker = new ConversationTracker(_options);
 
             UseGpu = _options.UseGpu;
@@ -114,7 +115,7 @@ namespace OfflineChatBot.Services.Llm
             RestartContext();
 
             var prompt = _promptBuilder.Build([], question, content);
-            var filter = new StopTokenFilter();
+            var filter = new StopTokenFilter(_format);
             var answer = new StringBuilder();
 
             try
@@ -144,7 +145,7 @@ namespace OfflineChatBot.Services.Llm
         {
             var messages = await PrepareAsync(history, cancellationToken);
             var input = PrepareInput(conversationId, messages, userPrompt, imagePath, documentContext);
-            var filter = new StopTokenFilter();
+            var filter = new StopTokenFilter(_format);
             var throughput = new ThroughputMeter();
             var isFirstChunk = true;
             var completed = false;
@@ -283,7 +284,14 @@ namespace OfflineChatBot.Services.Llm
             _weights = LLamaWeights.LoadFromFile(_parameters);
 
             LoadVisionWeights(visionProjectionPath);
+            UsePromptFormat(_visionWeights == null ? PromptFormat.ChatMl : PromptFormat.Vicuna);
             RestartContext();
+        }
+
+        private void UsePromptFormat(PromptFormat format)
+        {
+            _format = format;
+            _promptBuilder = new PromptBuilder(this, _options, format);
         }
 
         private int RequestedGpuLayers => UseGpu ? _options.GpuLayerCount : 0;
@@ -348,7 +356,7 @@ namespace OfflineChatBot.Services.Llm
             return new InferenceParams
             {
                 MaxTokens = maxTokens,
-                AntiPrompts = ChatMlPromptBuilder.StopTokens.ToList(),
+                AntiPrompts = _format.StopTokens.ToList(),
                 SamplingPipeline = new DefaultSamplingPipeline
                 {
                     Temperature = _options.Temperature,

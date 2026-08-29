@@ -23,7 +23,7 @@ namespace OfflineChatBot.Tests.Services
         [Fact]
         public void Take_HoldsBackTextThatCouldStillBecomeAStopToken()
         {
-            var filter = new StopTokenFilter();
+            var filter = new StopTokenFilter(PromptFormat.ChatMl);
 
             Assert.Equal("Hi ", filter.Take("Hi <|im"));
             Assert.Equal("there", filter.Take("_end|>there"));
@@ -43,7 +43,7 @@ namespace OfflineChatBot.Tests.Services
 
         private static string RunThrough(string[] chunks)
         {
-            var filter = new StopTokenFilter();
+            var filter = new StopTokenFilter(PromptFormat.ChatMl);
             var output = new StringBuilder();
 
             foreach (var chunk in chunks)

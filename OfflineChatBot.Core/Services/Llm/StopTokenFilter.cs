@@ -4,15 +4,21 @@ namespace OfflineChatBot.Services.Llm
 {
     public sealed class StopTokenFilter
     {
-        private static readonly int LongestStopToken = ChatMlPromptBuilder.StopTokens.Max(token => token.Length);
-
         private readonly StringBuilder _buffer = new StringBuilder();
+        private readonly PromptFormat _format;
+        private readonly int _longestStopToken;
+
+        public StopTokenFilter(PromptFormat format)
+        {
+            _format = format;
+            _longestStopToken = format.StopTokens.Max(token => token.Length);
+        }
 
         public string Take(string chunk)
         {
             _buffer.Append(chunk);
 
-            var text = ChatMlPromptBuilder.RemoveStopTokens(_buffer.ToString());
+            var text = _format.RemoveStopTokens(_buffer.ToString());
             var safeLength = SafeLength(text);
 
             _buffer.Clear();
@@ -23,7 +29,7 @@ namespace OfflineChatBot.Services.Llm
 
         public string Flush()
         {
-            var text = ChatMlPromptBuilder.RemoveStopTokens(_buffer.ToString());
+            var text = _format.RemoveStopTokens(_buffer.ToString());
 
             _buffer.Clear();
 
@@ -32,9 +38,9 @@ namespace OfflineChatBot.Services.Llm
 
         #region Private Methods
 
-        private static int SafeLength(string text)
+        private int SafeLength(string text)
         {
-            var maxHeldBack = Math.Min(LongestStopToken - 1, text.Length);
+            var maxHeldBack = Math.Min(_longestStopToken - 1, text.Length);
 
             for (var heldBack = maxHeldBack; heldBack > 0; heldBack--)
             {
@@ -45,16 +51,16 @@ namespace OfflineChatBot.Services.Llm
             return text.Length;
         }
 
-        private static int LengthWithoutDanglingToken(string text)
+        private int LengthWithoutDanglingToken(string text)
         {
             var safeLength = SafeLength(text);
 
             return text.Length - safeLength > 1 ? safeLength : text.Length;
         }
 
-        private static bool StartsAStopToken(string suffix)
+        private bool StartsAStopToken(string suffix)
         {
-            return ChatMlPromptBuilder.StopTokens.Any(token => token.StartsWith(suffix) && token != suffix);
+            return _format.StopTokens.Any(token => token.StartsWith(suffix) && token != suffix);
         }
 
         #endregion

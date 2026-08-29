@@ -5,7 +5,7 @@ using Xunit;
 
 namespace OfflineChatBot.Tests.Services
 {
-    public class ChatMlPromptBuilderTests
+    public class PromptBuilderTests
     {
         [Fact]
         public void Build_WithoutHistory_StartsWithSystemPromptAndEndsWaitingForAssistant()
@@ -13,7 +13,7 @@ namespace OfflineChatBot.Tests.Services
             var prompt = BuildNormalized([], "Hello");
 
             Assert.StartsWith("<|im_start|>system", prompt);
-            Assert.Contains(ChatMlPromptBuilder.SystemPrompt, prompt);
+            Assert.Contains(PromptFormat.ChatMl.SystemPrompt, prompt);
             Assert.Contains("<|im_start|>user\nHello", prompt);
             Assert.EndsWith("<|im_start|>assistant\n", prompt);
         }
@@ -116,12 +116,50 @@ namespace OfflineChatBot.Tests.Services
         [Fact]
         public void RemoveStopTokens_StripsEveryKnownToken()
         {
-            var cleaned = ChatMlPromptBuilder.RemoveStopTokens("a<|im_end|>b<|im_start|>c<|endoftext|>");
+            var cleaned = PromptFormat.ChatMl.RemoveStopTokens("a<|im_end|>b<|im_start|>c<|endoftext|>");
 
             Assert.Equal("abc", cleaned);
         }
 
-        private static ChatMlPromptBuilder CreateBuilder(uint contextSize, int maxTokens = 2048, int maxHistoryTokens = int.MaxValue)
+        [Fact]
+        public void Build_InVicuna_UsesTheFormatTheVisionModelWasTrainedOn()
+        {
+            var history = new List<ChatMessage>
+            {
+                new ChatMessage { Sender = MessageSender.User, Content = "First question" },
+                new ChatMessage { Sender = MessageSender.Assistant, Content = "First answer" }
+            };
+
+            var prompt = CreateBuilder(contextSize: 8192, format: PromptFormat.Vicuna).Build(history, "Second question").Text;
+
+            Assert.StartsWith(PromptFormat.Vicuna.SystemPrompt, prompt);
+            Assert.Contains("USER: First question", prompt);
+            Assert.Contains("ASSISTANT: First answer</s>", prompt);
+            Assert.EndsWith("ASSISTANT:", prompt);
+            Assert.DoesNotContain("<|im_start|>", prompt);
+        }
+
+        [Fact]
+        public void Build_InVicuna_StillDropsTheOldestMessagesWhenTheBudgetRunsOut()
+        {
+            var history = CreateHistory(40);
+
+            var result = CreateBuilder(contextSize: 700, maxTokens: 100, format: PromptFormat.Vicuna).Build(history, "Now");
+
+            Assert.True(result.DroppedMessages > 0);
+            Assert.Equal(40, result.IncludedMessages + result.DroppedMessages);
+            Assert.DoesNotContain("Message 1 ", result.Text);
+            Assert.Contains("Message 40 ", result.Text);
+        }
+
+        [Fact]
+        public void RemoveStopTokens_InVicuna_StripsTheEndOfTurnMarker()
+        {
+            var cleaned = PromptFormat.Vicuna.RemoveStopTokens("an answer</s>");
+
+            Assert.Equal("an answer", cleaned);
+        }
+        private static PromptBuilder CreateBuilder(uint contextSize, int maxTokens = 2048, int maxHistoryTokens = int.MaxValue, PromptFormat? format = null)
         {
             var options = new GenerationOptions
             {
@@ -130,7 +168,7 @@ namespace OfflineChatBot.Tests.Services
                 MaxHistoryTokens = maxHistoryTokens
             };
 
-            return new ChatMlPromptBuilder(new FakeTokenCounter(), options);
+            return new PromptBuilder(new FakeTokenCounter(), options, format ?? PromptFormat.ChatMl);
         }
 
         private static List<ChatMessage> CreateHistory(int count)

@@ -1,48 +1,33 @@
-using System.Text;
 using OfflineChatBot.Models;
 using OfflineChatBot.Services.Abstractions;
 
 namespace OfflineChatBot.Services.Llm
 {
-    public sealed class ChatMlPromptBuilder
+    public sealed class PromptBuilder
     {
-        public const string SystemPrompt =
-            "You are a helpful, intelligent AI assistant. Respond naturally, articulate, and accurately. " +
-            "Only format code snippets in markdown code blocks when answering coding questions or when code is explicitly requested.";
-
-        public static readonly IReadOnlyList<string> StopTokens = new[] { "<|im_end|>", "<|im_start|>", "<|endoftext|>" };
-
-        private const string AssistantOpening = "<|im_start|>assistant\n";
-
         private const string UnknownLanguageReminder =
             "\n\n(Write the whole answer in the same language as the question above, whatever language the instructions and the attached material are in.)";
 
         private readonly ITokenCounter _tokenCounter;
         private readonly GenerationOptions _options;
+        private readonly PromptFormat _format;
 
-        public ChatMlPromptBuilder(ITokenCounter tokenCounter, GenerationOptions options)
+        public PromptBuilder(ITokenCounter tokenCounter, GenerationOptions options, PromptFormat format)
         {
             _tokenCounter = tokenCounter;
             _options = options;
-        }
-
-        public static string RemoveStopTokens(string text)
-        {
-            foreach (var token in StopTokens)
-                text = text.Replace(token, string.Empty);
-
-            return text;
+            _format = format;
         }
 
         public string BuildTurn(string userPrompt)
         {
-            return FormatTurn("user", userPrompt + ReminderFor(userPrompt)) + AssistantOpening;
+            return _format.UserTurn(userPrompt + ReminderFor(userPrompt)) + _format.AssistantOpening;
         }
 
         public PromptResult Build(IEnumerable<ChatMessage> history, string userPrompt, string documentContext = "")
         {
-            var opening = FormatTurn("system", SystemPrompt + DocumentBlock(documentContext));
-            var closing = FormatTurn("user", userPrompt + ReminderFor(userPrompt)) + AssistantOpening;
+            var opening = _format.SystemTurn(_format.SystemPrompt + DocumentBlock(documentContext));
+            var closing = BuildTurn(userPrompt);
             var candidates = history.Where(message => message.IsUser || message.IsAssistant).ToList();
 
             var included = SelectWithinBudget(candidates, opening, closing);
@@ -70,7 +55,7 @@ namespace OfflineChatBot.Services.Llm
 
             foreach (var message in Enumerable.Reverse(candidates))
             {
-                var turn = FormatTurn(RoleOf(message), message.Content);
+                var turn = TurnFor(message);
                 var cost = _tokenCounter.Count(turn);
 
                 if (cost > available)
@@ -100,20 +85,9 @@ namespace OfflineChatBot.Services.Llm
             return $"\n\nThe user attached a document. This is what you have to answer from:\n---\n{documentContext}\n---\nAnswer from this material, and say so when the answer is not in it.";
         }
 
-        private static string RoleOf(ChatMessage message)
+        private string TurnFor(ChatMessage message)
         {
-            return message.IsUser ? "user" : "assistant";
-        }
-
-        private static string FormatTurn(string role, string content)
-        {
-            var builder = new StringBuilder();
-
-            builder.AppendLine($"<|im_start|>{role}");
-            builder.AppendLine(content);
-            builder.AppendLine("<|im_end|>");
-
-            return builder.ToString();
+            return message.IsUser ? _format.UserTurn(message.Content) : _format.AssistantTurn(message.Content);
         }
 
         #endregion

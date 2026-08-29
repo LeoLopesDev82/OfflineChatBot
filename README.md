@@ -6,6 +6,20 @@ A desktop AI chat application built with C# and WPF to demonstrate local inferen
 
 The core objective of this repository is to showcase software engineering practices, including MVVM architecture, asynchronous programming, thread safety, and integration with C++ bindings for local AI execution via [LLamaSharp](https://github.com/SciSharp/LLamaSharp).
 
+## 📸 Screenshots
+
+**Chat with live hardware metrics.** A coding question answered by Qwen 2.5 3B with all 37 layers offloaded to the GPU. The header reports CPU, RAM, video memory, generation speed and the active device while the answer streams in, and code blocks are rendered with syntax highlighting and a copy button.
+
+![Chat with live hardware metrics](docs/images/chat.png)
+
+**Question answering over a document.** A Word file attached to the conversation and answered from its contents. The strip above the composer stays visible for as long as the conversation holds the document, reporting its size in tokens and whether it fits in a single pass or has to be read in parts on every question.
+
+![Question answering over a document](docs/images/document.png)
+
+**Vision.** LLaVA 1.5 7B describing an image attached to the chat. The model runs on the CPU here because 4.4 GB of weights do not fit the 4 GB card, and the app reports that instead of failing.
+
+![Describing an attached image](docs/images/vision.png)
+
 ## 🛠️ Technical Highlights
 
 * **Local Inference Engine:** Executes `.gguf` quantized models locally.

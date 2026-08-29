@@ -343,13 +343,21 @@
                     BorderThickness="0,0,0,1"
                     Padding="20,14">
                 <Grid>
-                    <TextBlock Text="{Binding CurrentSession.Title, FallbackValue='Chat'}"
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding CurrentSession.Title, FallbackValue='Chat'}"
+                               TextTrimming="CharacterEllipsis"
+                               Margin="0,0,12,0"
                                Foreground="{StaticResource TextPrimaryBrush}"
                                FontSize="16"
                                FontWeight="Bold"
                                VerticalAlignment="Center"/>
 
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                         <Border Background="{StaticResource BgCardBrush}"
                                 BorderBrush="{StaticResource BorderBrush}"
                                 BorderThickness="1"

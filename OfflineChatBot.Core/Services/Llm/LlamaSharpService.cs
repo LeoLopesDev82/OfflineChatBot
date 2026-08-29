@@ -13,6 +13,8 @@ namespace OfflineChatBot.Services.Llm
 {
     public sealed class LlamaSharpService : ILlmService, ITokenCounter, IDisposable
     {
+        private const string AlreadyGeneratingMessage = "The model is already answering. One model, one context, one answer at a time.";
+
         private static readonly string[] AssistantPrefixes = { "Bot:", "Help:", "Assistant:" };
 
         private readonly GenerationOptions _options;
@@ -28,6 +30,7 @@ namespace OfflineChatBot.Services.Llm
         private InteractiveExecutor? _executor;
         private LLamaContext? _context;
         private string _mediaMarker = string.Empty;
+        private int _generating;
 
         public LlamaSharpService(IOptions<GenerationOptions> options, ILogger<LlamaSharpService> logger)
         {
@@ -110,6 +113,20 @@ namespace OfflineChatBot.Services.Llm
 
         public async Task<string> CompleteAsync(string question, string content, CancellationToken cancellationToken = default)
         {
+            EnterGeneration();
+
+            try
+            {
+                return await CompleteInternalAsync(question, content, cancellationToken);
+            }
+            finally
+            {
+                LeaveGeneration();
+            }
+        }
+
+        private async Task<string> CompleteInternalAsync(string question, string content, CancellationToken cancellationToken)
+        {
             await PrepareAsync([], cancellationToken);
 
             RestartContext();
@@ -142,6 +159,27 @@ namespace OfflineChatBot.Services.Llm
             string? imagePath = null,
             string documentContext = "",
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            EnterGeneration();
+
+            try
+            {
+                await foreach (var chunk in StreamAsync(conversationId, history, userPrompt, imagePath, documentContext, cancellationToken))
+                    yield return chunk;
+            }
+            finally
+            {
+                LeaveGeneration();
+            }
+        }
+
+        private async IAsyncEnumerable<string> StreamAsync(
+            string conversationId,
+            IEnumerable<ChatMessage> history,
+            string userPrompt,
+            string? imagePath,
+            string documentContext,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var messages = await PrepareAsync(history, cancellationToken);
             var input = PrepareInput(conversationId, messages, userPrompt, imagePath, documentContext);
@@ -192,6 +230,17 @@ namespace OfflineChatBot.Services.Llm
         }
 
         #region Private Methods
+
+        private void EnterGeneration()
+        {
+            if (Interlocked.CompareExchange(ref _generating, 1, 0) != 0)
+                throw new InvalidOperationException(AlreadyGeneratingMessage);
+        }
+
+        private void LeaveGeneration()
+        {
+            Interlocked.Exchange(ref _generating, 0);
+        }
 
         private bool IsModelReady(string modelPath)
         {

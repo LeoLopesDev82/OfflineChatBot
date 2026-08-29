@@ -180,7 +180,7 @@ namespace OfflineChatBot.Services.Llm
 
                 _logger.LogInformation("Generated {TokenCount} tokens at {TokensPerSecond:F1} tokens per second", throughput.TokenCount, LastTokensPerSecond);
 
-                Remember(completed, conversationId, messages.Count, documentContext, input.TokenCount + throughput.TokenCount);
+                Remember(completed, conversationId, messages.Count, documentContext);
             }
         }
 
@@ -241,16 +241,21 @@ namespace OfflineChatBot.Services.Llm
             return result;
         }
 
-        private void Remember(bool completed, string conversationId, int historyCount, string documentContext, int addedTokens)
+        private void Remember(bool completed, string conversationId, int historyCount, string documentContext)
         {
-            if (!completed)
+            if (!completed || _context == null)
             {
                 _tracker.Invalidate();
 
                 return;
             }
 
-            _tracker.Advance(conversationId, historyCount, documentContext, addedTokens);
+            _tracker.Advance(conversationId, historyCount, documentContext, ConsumedTokens());
+        }
+
+        private int ConsumedTokens()
+        {
+            return _context!.NativeHandle.MemorySequenceMaxPosition(LLamaSeqId.Zero).Value + 1;
         }
 
         private static int EstimateTokens(string text)

@@ -70,8 +70,8 @@ namespace OfflineChatBot.Tests.Services
             var tracker = Create();
 
             tracker.Advance("chat-1", 0, string.Empty, 100);
-            tracker.Advance("chat-1", 2, string.Empty, 100);
-            tracker.Advance("chat-1", 4, string.Empty, 100);
+            tracker.Advance("chat-1", 2, string.Empty, 250);
+            tracker.Advance("chat-1", 4, string.Empty, 400);
 
             Assert.True(tracker.CanContinue("chat-1", 6, string.Empty, false, 10));
         }
@@ -88,7 +88,7 @@ namespace OfflineChatBot.Tests.Services
         }
 
         [Fact]
-        public void TheRoomLeft_ShrinksWithEveryTurn()
+        public void TheRoomLeft_ShrinksAsTheContextFillsUp()
         {
             var tracker = Create(contextSize: 1000, maxTokens: 200);
 
@@ -96,11 +96,21 @@ namespace OfflineChatBot.Tests.Services
 
             Assert.True(tracker.CanContinue("chat-1", 2, string.Empty, false, 300));
 
-            tracker.Advance("chat-1", 2, string.Empty, 400);
+            tracker.Advance("chat-1", 2, string.Empty, 800);
 
             Assert.False(tracker.CanContinue("chat-1", 4, string.Empty, false, 300));
         }
 
+        [Fact]
+        public void Advance_TakesWhatTheContextHolds_NotWhatWasAdded()
+        {
+            var tracker = Create(contextSize: 1000, maxTokens: 200);
+
+            tracker.Advance("chat-1", 0, string.Empty, 700);
+            tracker.Advance("chat-1", 2, string.Empty, 300);
+
+            Assert.True(tracker.CanContinue("chat-1", 4, string.Empty, false, 400));
+        }
         [Fact]
         public void Invalidating_StartsOver()
         {

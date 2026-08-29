@@ -30,12 +30,12 @@ namespace OfflineChatBot.Services.Llm
             return _consumedTokens + incomingTokens + _options.MaxTokens <= _options.ContextSize;
         }
 
-        public void Advance(string conversationId, int historyCount, string documentContext, int addedTokens)
+        public void Advance(string conversationId, int historyCount, string documentContext, int consumedTokens)
         {
             _conversationId = conversationId;
             _documentContext = documentContext;
             _consumedMessages = historyCount + 2;
-            _consumedTokens += addedTokens;
+            _consumedTokens = consumedTokens;
         }
 
         public void Invalidate()

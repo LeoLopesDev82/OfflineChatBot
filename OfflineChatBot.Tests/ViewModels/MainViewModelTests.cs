@@ -248,17 +248,24 @@ namespace OfflineChatBot.Tests.ViewModels
                 var router = new FakeQuestionRouter();
                 var documentStore = new FakeDocumentStore();
                 var models = new ModelManagerViewModel(new FakeModelManagerService(), llm, dialogs, status, modelsLog);
+                var attachments = new DocumentAttachmentViewModel(
+                    dialogs,
+                    new FakeLogger<DocumentAttachmentViewModel>(),
+                    documents,
+                    scanner,
+                    spreadsheets,
+                    router,
+                    documentStore,
+                    status);
+
                 var viewModel = new MainViewModel(
                     llm,
                     storage,
                     dialogs,
                     new ImmediateUiDispatcher(),
                     new FakeLogger<MainViewModel>(),
-                    documents,
-                    scanner,
-                    spreadsheets,
-                    router,
                     documentStore,
+                    attachments,
                     models,
                     status);
 

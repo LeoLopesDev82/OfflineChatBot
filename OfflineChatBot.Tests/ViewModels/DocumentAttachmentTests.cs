@@ -16,8 +16,8 @@ namespace OfflineChatBot.Tests.ViewModels
 
             await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
 
-            Assert.True(context.ViewModel.HasPendingDocument);
-            Assert.Equal("contract.pdf", context.ViewModel.PendingDocumentName);
+            Assert.True(context.ViewModel.Documents.HasPendingDocument);
+            Assert.Equal("contract.pdf", context.ViewModel.Documents.PendingDocumentName);
             Assert.Equal("The delivery takes thirty days.", context.DocumentStore.Stored.Values.Single());
         }
 
@@ -30,7 +30,7 @@ namespace OfflineChatBot.Tests.ViewModels
 
             await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
 
-            Assert.False(context.ViewModel.HasPendingDocument);
+            Assert.False(context.ViewModel.Documents.HasPendingDocument);
             Assert.Empty(context.DocumentStore.Stored);
         }
 
@@ -44,7 +44,7 @@ namespace OfflineChatBot.Tests.ViewModels
 
             await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
 
-            Assert.False(context.ViewModel.HasPendingDocument);
+            Assert.False(context.ViewModel.Documents.HasPendingDocument);
             Assert.Contains(context.Dialogs.Information, message => message.Contains("No text could be read"));
         }
 
@@ -62,7 +62,7 @@ namespace OfflineChatBot.Tests.ViewModels
             await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
 
             Assert.Equal(1, context.Dialogs.ConfirmCount);
-            Assert.True(context.ViewModel.HasPendingDocument);
+            Assert.True(context.ViewModel.Documents.HasPendingDocument);
             Assert.Single(context.DocumentStore.Stored);
         }
 
@@ -79,7 +79,7 @@ namespace OfflineChatBot.Tests.ViewModels
 
             await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
 
-            Assert.False(context.ViewModel.HasPendingDocument);
+            Assert.False(context.ViewModel.Documents.HasPendingDocument);
             Assert.Empty(context.DocumentStore.Stored);
         }
 
@@ -98,7 +98,7 @@ namespace OfflineChatBot.Tests.ViewModels
             await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
 
             Assert.Equal(1, context.Dialogs.ConfirmCount);
-            Assert.Equal("invoice.pdf", context.ViewModel.PendingDocumentName);
+            Assert.Equal("invoice.pdf", context.ViewModel.Documents.PendingDocumentName);
         }
 
         [Fact]
@@ -248,15 +248,15 @@ namespace OfflineChatBot.Tests.ViewModels
 
             var attaching = context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
 
-            Assert.True(context.ViewModel.IsReadingDocument);
-            Assert.Equal("contract.pdf", context.ViewModel.PendingDocumentName);
+            Assert.True(context.ViewModel.Documents.IsReadingDocument);
+            Assert.Equal("contract.pdf", context.ViewModel.Documents.PendingDocumentName);
             Assert.False(context.ViewModel.SendMessageCommand.CanExecute(null));
 
             context.Reader.Gate.SetResult();
 
             await attaching;
 
-            Assert.False(context.ViewModel.IsReadingDocument);
+            Assert.False(context.ViewModel.Documents.IsReadingDocument);
             Assert.True(context.ViewModel.SendMessageCommand.CanExecute(null));
         }
 
@@ -293,7 +293,7 @@ namespace OfflineChatBot.Tests.ViewModels
             var sent = context.ViewModel.CurrentSession!.Messages.First(message => message.IsUser);
 
             Assert.Equal("contract.pdf", sent.AttachedDocumentName);
-            Assert.False(context.ViewModel.HasPendingDocument);
+            Assert.False(context.ViewModel.Documents.HasPendingDocument);
         }
 
         [Fact]
@@ -407,7 +407,7 @@ namespace OfflineChatBot.Tests.ViewModels
 
             await context.ViewModel.RemoveAttachedDocumentCommand.ExecuteAsync(null);
 
-            Assert.False(context.ViewModel.HasPendingDocument);
+            Assert.False(context.ViewModel.Documents.HasPendingDocument);
             Assert.Contains(sessionId, context.DocumentStore.Deleted);
         }
 
@@ -421,8 +421,8 @@ namespace OfflineChatBot.Tests.ViewModels
 
             await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
 
-            Assert.True(context.ViewModel.HasActiveDocument);
-            Assert.Equal("contract.pdf · 1,840 tokens · read in one pass", context.ViewModel.ActiveDocumentSummary);
+            Assert.True(context.ViewModel.Documents.HasActiveDocument);
+            Assert.Equal("contract.pdf · 1,840 tokens · read in one pass", context.ViewModel.Documents.ActiveDocumentSummary);
         }
 
         [Fact]
@@ -437,7 +437,7 @@ namespace OfflineChatBot.Tests.ViewModels
 
             await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
 
-            Assert.Equal("book.docx · 75,700 tokens · read in 11 parts on every question", context.ViewModel.ActiveDocumentSummary);
+            Assert.Equal("book.docx · 75,700 tokens · read in 11 parts on every question", context.ViewModel.Documents.ActiveDocumentSummary);
         }
 
         [Fact]
@@ -450,8 +450,8 @@ namespace OfflineChatBot.Tests.ViewModels
             await context.ViewModel.AttachDocumentCommand.ExecuteAsync(null);
             await context.ViewModel.RemoveAttachedDocumentCommand.ExecuteAsync(null);
 
-            Assert.False(context.ViewModel.HasActiveDocument);
-            Assert.Equal(string.Empty, context.ViewModel.ActiveDocumentSummary);
+            Assert.False(context.ViewModel.Documents.HasActiveDocument);
+            Assert.Equal(string.Empty, context.ViewModel.Documents.ActiveDocumentSummary);
         }
 
         [Fact]
@@ -465,8 +465,8 @@ namespace OfflineChatBot.Tests.ViewModels
 
             context.ViewModel.CreateNewChatCommand.Execute(null);
 
-            Assert.False(context.ViewModel.HasActiveDocument);
-            Assert.Equal(string.Empty, context.ViewModel.ActiveDocumentSummary);
+            Assert.False(context.ViewModel.Documents.HasActiveDocument);
+            Assert.Equal(string.Empty, context.ViewModel.Documents.ActiveDocumentSummary);
         }
 
         [Fact]
@@ -497,17 +497,24 @@ namespace OfflineChatBot.Tests.ViewModels
             var status = new AppStatusViewModel(new FakeResourceMonitor(), llm);
             var models = new ModelManagerViewModel(new FakeModelManagerService(), llm, dialogs, status, new FakeLogger<ModelManagerViewModel>());
 
+            var attachments = new DocumentAttachmentViewModel(
+                dialogs,
+                new FakeLogger<DocumentAttachmentViewModel>(),
+                reader,
+                scanner,
+                spreadsheets,
+                router,
+                documentStore,
+                status);
+
             var viewModel = new MainViewModel(
                 llm,
                 new FakeChatStorageService(),
                 dialogs,
                 new ImmediateUiDispatcher(),
                 new FakeLogger<MainViewModel>(),
-                reader,
-                scanner,
-                spreadsheets,
-                router,
                 documentStore,
+                attachments,
                 models,
                 status);
 

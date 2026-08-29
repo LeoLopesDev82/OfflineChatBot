@@ -142,6 +142,7 @@ namespace OfflineChatBot
 
             services.AddSingleton<AppStatusViewModel>();
             services.AddSingleton<ModelManagerViewModel>();
+            services.AddSingleton<DocumentAttachmentViewModel>();
             services.AddSingleton<MainViewModel>();
 
             services.AddSingleton<MainWindow>();

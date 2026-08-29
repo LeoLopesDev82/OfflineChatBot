@@ -1,8 +1,7 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using System.IO;
-using System.Globalization;
 using Microsoft.Extensions.Logging;
 using OfflineChatBot.Models;
 using OfflineChatBot.Services.Abstractions;
@@ -13,23 +12,16 @@ namespace OfflineChatBot.ViewModels
     {
         private const string NoModelMessage = "[No downloaded model available. Please open Model Manager to download Qwen 2.5.]";
         private const string VisionRequiredMessage = "Image attachments require a vision model. Please select LLaVA 1.5 7B (Vision & Chat) before sending your message.";
-        private const string PartedReadingMessage = "{0} holds {1} tokens, more than this model can read at once. It will be read in {2} parts, and every question will pay that cost. Attach it anyway?";
-        private const string ReplaceDocumentMessage = "This chat already has {0} attached, and a chat holds one document at a time. Replace it with {1}? Earlier messages keep showing {0}, but from now on questions are answered from {1}.";
 
         private readonly ILlmService _llmService;
         private readonly IChatStorageService _chatStorage;
         private readonly IDialogService _dialogService;
         private readonly IUiDispatcher _uiDispatcher;
         private readonly ILogger<MainViewModel> _logger;
-        private readonly IDocumentReader _reader;
-        private readonly IDocumentScanner _scanner;
-        private readonly ISpreadsheetQueryService _spreadsheets;
-        private readonly IQuestionRouter _router;
         private readonly IDocumentStore _documentStore;
         private readonly SemaphoreSlim _saveLock = new SemaphoreSlim(1, 1);
 
         private CancellationTokenSource? _generationCts;
-        private ReadDocument? _activeDocument;
 
         [ObservableProperty]
         private ObservableCollection<ChatSession> _sessions = new ObservableCollection<ChatSession>();
@@ -47,26 +39,14 @@ namespace OfflineChatBot.ViewModels
         [NotifyPropertyChangedFor(nameof(HasPendingImage))]
         private string? _pendingImagePath;
 
-        [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(HasPendingDocument))]
-        private string? _pendingDocumentName;
-
-        [ObservableProperty]
-        [NotifyCanExecuteChangedFor(nameof(SendMessageCommand))]
-        [NotifyCanExecuteChangedFor(nameof(AttachDocumentCommand))]
-        private bool _isReadingDocument;
-
         public MainViewModel(
             ILlmService llmService,
             IChatStorageService chatStorage,
             IDialogService dialogService,
             IUiDispatcher uiDispatcher,
             ILogger<MainViewModel> logger,
-            IDocumentReader reader,
-            IDocumentScanner scanner,
-            ISpreadsheetQueryService spreadsheets,
-            IQuestionRouter router,
             IDocumentStore documentStore,
+            DocumentAttachmentViewModel documents,
             ModelManagerViewModel models,
             AppStatusViewModel status)
         {
@@ -75,28 +55,22 @@ namespace OfflineChatBot.ViewModels
             _dialogService = dialogService;
             _uiDispatcher = uiDispatcher;
             _logger = logger;
-            _reader = reader;
-            _scanner = scanner;
-            _spreadsheets = spreadsheets;
-            _router = router;
             _documentStore = documentStore;
 
+            Documents = documents;
             Models = models;
             Status = status;
+
+            Documents.PropertyChanged += OnDocumentsPropertyChanged;
         }
 
+        public DocumentAttachmentViewModel Documents { get; }
         public ModelManagerViewModel Models { get; }
         public AppStatusViewModel Status { get; }
 
         public bool HasPendingImage => !string.IsNullOrEmpty(PendingImagePath);
 
-        public bool HasPendingDocument => !string.IsNullOrEmpty(PendingDocumentName);
-
         public bool HasOpenRename => Sessions.Any(session => session.IsEditing);
-
-        public bool HasActiveDocument => CurrentSession?.DocumentName != null;
-
-        public string ActiveDocumentSummary => DescribeActiveDocument();
 
         public async Task InitializeAsync()
         {
@@ -192,37 +166,17 @@ namespace OfflineChatBot.ViewModels
         [RelayCommand(CanExecute = nameof(IsIdle))]
         public async Task AttachDocumentAsync()
         {
-            var filePath = _dialogService.PickDocumentFile();
+            EnsureSession();
 
-            if (string.IsNullOrEmpty(filePath))
-                return;
+            await Documents.AttachAsync();
 
-            var session = CurrentSession ?? CreateAndSelectSession();
-
-            if (!await ConfirmReplacementAsync(session, filePath))
-                return;
-
-            await ReadDocumentAsync(session, filePath);
+            SaveSessions();
         }
 
         [RelayCommand]
         public async Task RemoveAttachedDocumentAsync()
         {
-            var session = CurrentSession;
-
-            if (session?.DocumentName == null)
-                return;
-
-            await _documentStore.DeleteAsync(session.Id);
-
-            session.DocumentName = null;
-            session.DocumentPath = null;
-            session.DocumentTokens = 0;
-            session.DocumentParts = 0;
-            _activeDocument = null;
-            PendingDocumentName = null;
-
-            NotifyActiveDocument();
+            await Documents.RemoveAsync();
 
             SaveSessions();
         }
@@ -235,14 +189,14 @@ namespace OfflineChatBot.ViewModels
 
             var prompt = UserInput.Trim();
             var imagePath = PendingImagePath;
-            var documentName = PendingDocumentName;
+            var documentName = Documents.PendingDocumentName;
 
             if (!await IsImageSupportedByActiveModelAsync(imagePath))
                 return;
 
             ClearComposer();
 
-            var session = CurrentSession ?? CreateAndSelectSession();
+            var session = EnsureSession();
             var history = session.Messages.ToList();
 
             session.RenameFromPrompt(prompt);
@@ -261,37 +215,28 @@ namespace OfflineChatBot.ViewModels
 
         partial void OnCurrentSessionChanged(ChatSession? value)
         {
-            _activeDocument = null;
-            PendingDocumentName = null;
-
-            NotifyActiveDocument();
+            Documents.UseSession(value);
         }
 
         #region Private Methods
 
-        private bool IsIdle() => !IsReadingDocument;
+        private bool IsIdle() => !Documents.IsReadingDocument;
 
-        private void NotifyActiveDocument()
+        private void OnDocumentsPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            OnPropertyChanged(nameof(HasActiveDocument));
-            OnPropertyChanged(nameof(ActiveDocumentSummary));
+            if (e.PropertyName != nameof(DocumentAttachmentViewModel.IsReadingDocument))
+                return;
+
+            SendMessageCommand.NotifyCanExecuteChanged();
+            AttachDocumentCommand.NotifyCanExecuteChanged();
         }
 
-        private string DescribeActiveDocument()
+        private ChatSession EnsureSession()
         {
-            var session = CurrentSession;
+            if (CurrentSession == null)
+                CreateNewChat();
 
-            if (session?.DocumentName == null)
-                return string.Empty;
-
-            if (session.DocumentTokens == 0)
-                return session.DocumentName;
-
-            var size = $"{session.DocumentName} · {session.DocumentTokens.ToString("N0", CultureInfo.InvariantCulture)} tokens";
-
-            return session.DocumentParts > 1
-                ? $"{size} · read in {session.DocumentParts} parts on every question"
-                : $"{size} · read in one pass";
+            return CurrentSession!;
         }
 
         private async Task LoadSessionsAsync()
@@ -303,182 +248,6 @@ namespace OfflineChatBot.ViewModels
 
             if (CurrentSession == null)
                 CreateNewChat();
-        }
-
-        private ChatSession CreateAndSelectSession()
-        {
-            CreateNewChat();
-
-            return CurrentSession!;
-        }
-
-        private async Task ReadDocumentAsync(ChatSession session, string filePath)
-        {
-            var fileName = Path.GetFileName(filePath);
-
-            PendingDocumentName = fileName;
-            IsReadingDocument = true;
-            Status.Message = $"Reading {fileName}...";
-
-            try
-            {
-                var document = await Task.Run(() => _reader.ReadAsync(filePath));
-
-                if (!await ConfirmPartedReadingAsync(document))
-                {
-                    PendingDocumentName = null;
-                    Status.Message = "Ready";
-
-                    return;
-                }
-
-                await _documentStore.SaveAsync(session.Id, document.Text);
-
-                _activeDocument = document;
-
-                session.DocumentName = document.Name;
-                session.DocumentPath = filePath;
-                session.DocumentTokens = document.Tokens;
-                session.DocumentParts = document.Parts;
-                PendingDocumentName = document.Name;
-
-                NotifyActiveDocument();
-
-                Status.Message = document.FitsInOnePass
-                    ? $"{document.Name} is attached with {document.Tokens} tokens, read in one pass."
-                    : $"{document.Name} is attached with {document.Tokens} tokens, read in {document.Parts} parts per question.";
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(exception, "Could not read {FileName}", fileName);
-                await _dialogService.ShowInformationAsync(exception.Message, "Could not read the document");
-
-                PendingDocumentName = null;
-                Status.Message = "Ready";
-            }
-            finally
-            {
-                IsReadingDocument = false;
-
-                SaveSessions();
-            }
-        }
-
-        private async Task<bool> ConfirmReplacementAsync(ChatSession session, string filePath)
-        {
-            var attached = session.DocumentName;
-            var picked = Path.GetFileName(filePath);
-
-            if (attached == null || attached.Equals(picked, StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            return await _dialogService.ConfirmAsync(string.Format(ReplaceDocumentMessage, attached, picked), "Replace the attached document");
-        }
-
-        private async Task<bool> ConfirmPartedReadingAsync(ReadDocument document)
-        {
-            if (document.FitsInOnePass)
-                return true;
-
-            _logger.LogInformation("{DocumentName} needs {PartCount} parts per question", document.Name, document.Parts);
-
-            return await _dialogService.ConfirmAsync(string.Format(PartedReadingMessage, document.Name, document.Tokens, document.Parts), "This document will be read in parts");
-        }
-
-        private async Task<string> FindDocumentContextAsync(ChatSession session, string prompt)
-        {
-            if (session.DocumentName == null)
-                return string.Empty;
-
-            var document = await EnsureDocumentLoadedAsync(session);
-
-            if (document == null)
-                return string.Empty;
-
-            if (CostsAPass(session, document) && !IsAboutTheDocument(prompt))
-            {
-                _logger.LogInformation("Left {DocumentName} alone, the message is not about it", document.Name);
-
-                return document.FitsInOnePass ? document.Text : string.Empty;
-            }
-
-            var queried = await QuerySpreadsheetAsync(session, prompt);
-
-            if (document.FitsInOnePass)
-            {
-                _logger.LogInformation("Sending {DocumentName} in full with {TokenCount} tokens", document.Name, document.Tokens);
-
-                return Join(document.Text, queried.Text);
-            }
-
-            return Join(await ScanInPartsAsync(document, prompt), queried.Text);
-        }
-
-        private bool CostsAPass(ChatSession session, ReadDocument document)
-        {
-            return !document.FitsInOnePass || _spreadsheets.CanQuery(session.DocumentPath);
-        }
-
-        private bool IsAboutTheDocument(string prompt)
-        {
-            return _router.NeedsDocument(prompt);
-        }
-
-        private async Task<QueryOutcome> QuerySpreadsheetAsync(ChatSession session, string prompt)
-        {
-            if (!_spreadsheets.CanQuery(session.DocumentPath))
-                return new QueryOutcome(false, string.Empty);
-
-            Status.Message = "Querying the spreadsheet...";
-
-            return await Task.Run(() => _spreadsheets.AskAsync(session.DocumentPath!, prompt, _generationCts!.Token), _generationCts!.Token);
-        }
-
-        private static string Join(string document, string queried)
-        {
-            return queried.Length == 0 ? document : $"{document}\n\n{queried}";
-        }
-
-        private async Task<string> ScanInPartsAsync(ReadDocument document, string prompt)
-        {
-            var progress = new Progress<ScanProgress>(ReportScanProgress);
-            var token = _generationCts!.Token;
-            var notes = await Task.Run(() => _scanner.ScanAsync(document, prompt, progress, token), token);
-
-            Status.Message = "Writing the answer...";
-
-            return notes;
-        }
-
-        private void ReportScanProgress(ScanProgress progress)
-        {
-            Status.Message = $"Reading part {progress.Part} of {progress.TotalParts}{RemainingSuffix(progress.Remaining)}...";
-        }
-
-        private static string RemainingSuffix(TimeSpan remaining)
-        {
-            if (remaining <= TimeSpan.Zero)
-                return string.Empty;
-
-            if (remaining.TotalMinutes < 1)
-                return $", about {remaining.TotalSeconds:F0}s left";
-
-            return $", about {remaining.TotalMinutes:F0} min left";
-        }
-
-        private async Task<ReadDocument?> EnsureDocumentLoadedAsync(ChatSession session)
-        {
-            if (_activeDocument != null)
-                return _activeDocument;
-
-            var text = await _documentStore.LoadAsync(session.Id);
-
-            if (text == null)
-                return null;
-
-            _activeDocument = _reader.Measure(session.DocumentName!, text);
-
-            return _activeDocument;
         }
 
         private void EnsureCurrentSession(ChatSession removedSession)
@@ -515,8 +284,9 @@ namespace OfflineChatBot.ViewModels
         private void ClearComposer()
         {
             UserInput = string.Empty;
-            PendingDocumentName = null;
             PendingImagePath = null;
+
+            Documents.ClearPending();
         }
 
         private async Task GenerateAnswerAsync(ChatMessage answer, ChatSession session, List<ChatMessage> history, string prompt, string? imagePath)
@@ -527,7 +297,7 @@ namespace OfflineChatBot.ViewModels
 
             try
             {
-                var documentContext = await FindDocumentContextAsync(session, prompt);
+                var documentContext = await Documents.FindContextAsync(session, prompt, _generationCts.Token);
 
                 await RequestAnswerAsync(answer, session.Id, history, prompt, imagePath, documentContext);
             }

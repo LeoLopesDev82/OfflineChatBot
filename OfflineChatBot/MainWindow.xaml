@@ -630,7 +630,7 @@
                     BorderThickness="0,1,0,0"
                     Padding="20,14">
                 <StackPanel>
-                    <Border Visibility="{Binding HasActiveDocument, Converter={StaticResource BoolToVisConverter}}"
+                    <Border Visibility="{Binding Documents.HasActiveDocument, Converter={StaticResource BoolToVisConverter}}"
                             Margin="4,0,4,8"
                             Padding="10,5"
                             CornerRadius="8"
@@ -640,7 +640,7 @@
                             <iconPacks:PackIconBootstrapIcons Kind="Paperclip" Width="12" Height="12"
                                                               Foreground="{StaticResource TextSecondaryBrush}"
                                                               VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Text="{Binding ActiveDocumentSummary}"
+                            <TextBlock Text="{Binding Documents.ActiveDocumentSummary}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        FontSize="11"
                                        VerticalAlignment="Center"/>
@@ -676,14 +676,14 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border Visibility="{Binding HasPendingDocument, Converter={StaticResource BoolToVisConverter}}"
+                            <Border Visibility="{Binding Documents.HasPendingDocument, Converter={StaticResource BoolToVisConverter}}"
                                     CornerRadius="8" Background="{StaticResource BgCardBrush}" Padding="8,6">
                                 <StackPanel Orientation="Horizontal">
                                     <iconPacks:PackIconBootstrapIcons Kind="FileEarmarkText" Width="14" Height="14" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                    <TextBlock Text="{Binding PendingDocumentName}" Foreground="{StaticResource TextPrimaryBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Text="{Binding Documents.PendingDocumentName}" Foreground="{StaticResource TextPrimaryBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
 
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
-                                                Visibility="{Binding IsReadingDocument, Converter={StaticResource BoolToVisConverter}}">
+                                                Visibility="{Binding Documents.IsReadingDocument, Converter={StaticResource BoolToVisConverter}}">
                                         <TextBlock Text="attaching, please wait" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" FontStyle="Italic" VerticalAlignment="Center"/>
                                         <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" FontStyle="Italic" FontWeight="Bold" Width="18" VerticalAlignment="Center">
                                             <TextBlock.Triggers>
@@ -703,7 +703,7 @@
                                     </StackPanel>
 
                                     <Button Background="Transparent" BorderThickness="0" Cursor="Hand" Command="{Binding RemoveAttachedDocumentCommand}" ToolTip="Remove document"
-                                            Visibility="{Binding IsReadingDocument, Converter={StaticResource InvBoolToVisConverter}}">
+                                            Visibility="{Binding Documents.IsReadingDocument, Converter={StaticResource InvBoolToVisConverter}}">
                                         <iconPacks:PackIconBootstrapIcons Kind="X" Width="16" Height="16" Foreground="{StaticResource TextSecondaryBrush}"/>
                                     </Button>
                                 </StackPanel>

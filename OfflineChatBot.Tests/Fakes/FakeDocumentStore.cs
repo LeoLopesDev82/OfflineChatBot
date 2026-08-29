@@ -6,6 +6,7 @@ namespace OfflineChatBot.Tests.Fakes
     {
         public Dictionary<string, string> Stored { get; } = new Dictionary<string, string>();
         public List<string> Deleted { get; } = new List<string>();
+        public Exception? DeleteFailure { get; set; }
 
         public Task SaveAsync(string sessionId, string text)
         {
@@ -21,6 +22,9 @@ namespace OfflineChatBot.Tests.Fakes
 
         public Task DeleteAsync(string sessionId)
         {
+            if (DeleteFailure != null)
+                return Task.FromException(DeleteFailure);
+
             Deleted.Add(sessionId);
             Stored.Remove(sessionId);
 

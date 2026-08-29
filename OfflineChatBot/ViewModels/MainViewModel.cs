@@ -107,7 +107,7 @@ namespace OfflineChatBot.ViewModels
 
             Sessions.Remove(session);
 
-            _ = _documentStore.DeleteAsync(session.Id);
+            await ForgetDocumentAsync(session);
 
             EnsureCurrentSession(session);
 
@@ -248,6 +248,18 @@ namespace OfflineChatBot.ViewModels
 
             if (CurrentSession == null)
                 CreateNewChat();
+        }
+
+        private async Task ForgetDocumentAsync(ChatSession session)
+        {
+            try
+            {
+                await _documentStore.DeleteAsync(session.Id);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception, "Could not delete the stored document of chat {SessionId}", session.Id);
+            }
         }
 
         private void EnsureCurrentSession(ChatSession removedSession)

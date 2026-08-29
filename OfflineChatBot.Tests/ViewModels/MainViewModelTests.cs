@@ -1,3 +1,4 @@
+using System.IO;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OfflineChatBot.Models;
@@ -219,6 +220,25 @@ namespace OfflineChatBot.Tests.ViewModels
             Assert.Empty(saved.Messages);
         }
 
+        [Fact]
+        public async Task DeleteChat_WhenErasingTheDocumentFails_LogsItAndStillRemovesTheChat()
+        {
+            var context = await TestContext.CreateAsync("Answer");
+
+            context.DocumentStore.DeleteFailure = new IOException("the document file is in use");
+
+            var removed = context.ViewModel.CurrentSession!;
+
+            context.ViewModel.DeleteChatCommand.Execute(removed);
+
+            Assert.DoesNotContain(removed, context.ViewModel.Sessions);
+
+            var logged = Assert.Single(context.MainLog.Problems);
+
+            Assert.Equal(LogLevel.Error, logged.Level);
+            Assert.Equal("the document file is in use", logged.Exception!.Message);
+        }
+
         private sealed class TestContext
         {
             public required MainViewModel ViewModel { get; init; }
@@ -227,6 +247,7 @@ namespace OfflineChatBot.Tests.ViewModels
             public required FakeDialogService Dialogs { get; init; }
             public required FakeChatStorageService Storage { get; init; }
             public required FakeLogger<ModelManagerViewModel> ModelsLog { get; init; }
+            public required FakeLogger<MainViewModel> MainLog { get; init; }
             public required FakeDocumentReader Documents { get; init; }
             public required FakeDocumentStore DocumentStore { get; init; }
 
@@ -242,6 +263,7 @@ namespace OfflineChatBot.Tests.ViewModels
                 var storage = new FakeChatStorageService { Stored = storedSessions.ToList() };
                 var status = new AppStatusViewModel(new FakeResourceMonitor(), llm);
                 var modelsLog = new FakeLogger<ModelManagerViewModel>();
+                var mainLog = new FakeLogger<MainViewModel>();
                 var documents = new FakeDocumentReader();
                 var scanner = new FakeDocumentScanner();
                 var spreadsheets = new FakeSpreadsheetQueryService();
@@ -263,7 +285,7 @@ namespace OfflineChatBot.Tests.ViewModels
                     storage,
                     dialogs,
                     new ImmediateUiDispatcher(),
-                    new FakeLogger<MainViewModel>(),
+                    mainLog,
                     documentStore,
                     attachments,
                     models,
@@ -280,6 +302,7 @@ namespace OfflineChatBot.Tests.ViewModels
                     Dialogs = dialogs,
                     Storage = storage,
                     ModelsLog = modelsLog,
+                    MainLog = mainLog,
                     Documents = documents,
                     DocumentStore = documentStore
                 };

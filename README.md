@@ -2,9 +2,11 @@
 
 [![build](https://github.com/LeoLopesDev82/OfflineChatBot/actions/workflows/ci.yml/badge.svg)](https://github.com/LeoLopesDev82/OfflineChatBot/actions/workflows/ci.yml)
 
-A desktop AI chat application built with C# and WPF to demonstrate local inference capabilities using the **Qwen 2.5** model family. The project runs entirely offline without relying on external cloud APIs, ensuring data privacy and local execution.
+A desktop chat application that runs language models on the machine itself. No cloud API, no account, nothing leaves the computer. It answers questions about the PDF, Word and Excel files you attach, describes images, and reports what the hardware is doing while it works.
 
-The core objective of this repository is to showcase software engineering practices, including MVVM architecture, asynchronous programming, thread safety, and integration with C++ bindings for local AI execution via [LLamaSharp](https://github.com/SciSharp/LLamaSharp).
+Two problems shaped most of the engineering. A document is usually larger than the model's context window, so it is read in parts and every part is asked the question, instead of a search picking the fragments it guesses are relevant. And a small model cannot be trusted to add up a column, so every figure taken from a spreadsheet is computed in C# and handed back to the model only to be worded.
+
+Built on .NET 9 with WPF and MVVM, running local inference through [LLamaSharp](https://github.com/SciSharp/LLamaSharp) over llama.cpp. Qwen 2.5 answers, LLaVA 1.5 reads images, and both are downloaded from inside the application.
 
 ## 📸 Screenshots
 
@@ -42,9 +44,9 @@ The solution is split so that everything except the presentation layer is free o
 | --- | --- | --- |
 | `OfflineChatBot.Core` | `net9.0` | Models, service abstractions, local inference, prompt building, model catalog and downloads. No WPF reference. |
 | `OfflineChatBot` | `net9.0-windows` | WPF views, view models, behaviors, converters and the platform services that implement the Core abstractions. Composition root lives in `App.xaml.cs`. |
-| `OfflineChatBot.Tests` | `net9.0-windows` | xUnit suite covering the parsing, prompt assembly, download state and view model orchestration, using hand written test doubles. |
+| `OfflineChatBot.Tests` | `net9.0-windows` | xUnit suite exercising the Core services and the view models. |
 
-Run the suite with:
+188 tests cover the spreadsheet block detection and query validation, the document splitting, the prompt assembly and context budgeting, the download and retry state machine, and the view model orchestration. They use hand written test doubles rather than a mocking library, and run on every push through GitHub Actions.
 
 ```bash
 dotnet test
@@ -95,12 +97,11 @@ When the document fits, reading it is the expensive step and it is paid once. Be
 
 A file larger than the context window is not turned away and is never cut down to what fits. It is read in parts: the question is put to every part in turn, each part answers with what it holds or with nothing, and the collected notes become the context for the final answer. Nothing is skipped, so a name that appears once in the middle of a long document is still found, which is exactly what retrieval could not do. The cost is one pass per part on every question, so the application says how many parts a file needs and asks before accepting it, then reports progress and a running estimate while it works.
 
-
 How expensive that is depends entirely on the hardware, and the difference is not subtle. On the GeForce GTX 1050 Ti this was built on, a seventy six thousand token novel is read in eleven parts and takes about fourteen minutes for every question asked. The same work on a card able to hold a long context model needs no parts at all: the novel fits in a single pass, the conversation context keeps it loaded, and every question after the first is answered immediately. The technique is the fallback for when the document does not fit, not the path a capable machine takes.
+
 The previous version of this feature searched the document instead of reading it, embedding passages and retrieving the closest ones to each question. It was measured, it worked as designed, and it was still replaced: retrieving four passages of a book puts under one percent of it in front of the model, so questions that need the whole picture came back wrong no matter which chat model answered them. Identical bad answers across different models is what pointed at the context rather than the model.
 
 Scanned PDFs have no text layer and are rejected with an explanation, since character recognition is not supported. The legacy binary `.doc` format is out of scope.
-
 
 ## 📊 Talking to a Spreadsheet
 
@@ -113,6 +114,7 @@ Each table is then profiled in C#: the type of every column, and the sum, averag
 The model receives that profile and the sheet as a tab separated table. When a question can be answered by a query, the model writes one as a small JSON object, C# runs it over the file, and the result is handed back for the model to phrase. Column names must match exactly or the query is refused, a condition naming a value no row holds is refused rather than answered with zero, and an ambiguous column name comes back asking which one was meant. Nothing is guessed: the answer is either computed from the file or the application says it cannot work it out.
 
 Reading a table is where a small model struggles most, and it struggles in a particular way: it takes a value from one row and reports it under another. Both a 3B and a 7B model did this on the same file. That is the reason every figure is computed in code rather than read out of the table by the model, and the reason a query that cannot be validated is refused instead of answered.
+
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -145,12 +147,13 @@ The architecture was designed to be extended.
 - [x] **Spreadsheet Analysis:** Reading `.xlsx` files, with the structure of each sheet detected and every figure computed in code.
 - [x] **Hardware Acceleration:** GPU offloading through the Vulkan backend, toggleable at runtime, with automatic fallback to the CPU.
 - [x] **Prompt Format per Model:** Talking to each model in the template it was trained on, since a vision model and an instruct model do not share one.
+- [x] **Document Attachment Split Out:** Moving the attachment state, the parted reading and the spreadsheet query into their own view model, so the chat one is left with conversations, sending and generation.
 
 **Next**
 
 - [ ] **Looking Things Up:** Consulting the internet when a question needs current information, with the model deciding in the background whether external context is needed.
 - [ ] **A Stronger Vision Model:** Moving to LLaVA 1.6 or Qwen2-VL once LLamaSharp supports them, since 1.5 is the weakest link in the image path.
-- [ ] **Splitting the Chat View Model:** Extracting the document orchestration out of `MainViewModel`, which has grown past what one class should own.
+- [ ] **Splitting the Inference Service:** Separating the model lifecycle, which loads weights and manages the context, from the generation that uses it. `LlamaSharpService` is now the largest file in the solution.
 
 ## ⚙️ Technology Stack
 * **Language:** C# 13 / .NET 9.0
@@ -158,8 +161,9 @@ The architecture was designed to be extended.
 * **Design Pattern:** MVVM
 * **AI Engine:** LLamaSharp (llama.cpp wrapper)
 
-## 🤝 Contributing
-Contributions, issues, and feature requests are welcome. Feel free to check the issues page.
+## 🤝 About This Repository
+
+This is a personal project, built to explore what local inference can and cannot do on ordinary hardware, and kept as a portfolio piece rather than a product. Questions and observations are welcome through the issues page.
 
 ## 📝 License
 This project is licensed under the MIT License - see the LICENSE file for details.

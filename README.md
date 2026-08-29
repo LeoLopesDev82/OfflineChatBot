@@ -46,7 +46,7 @@ The solution is split so that everything except the presentation layer is free o
 | `OfflineChatBot` | `net9.0-windows` | WPF views, view models, behaviors, converters and the platform services that implement the Core abstractions. Composition root lives in `App.xaml.cs`. |
 | `OfflineChatBot.Tests` | `net9.0-windows` | xUnit suite exercising the Core services and the view models. |
 
-188 tests cover the spreadsheet block detection and query validation, the document splitting, the prompt assembly and context budgeting, the download and retry state machine, and the view model orchestration. They use hand written test doubles rather than a mocking library, and run on every push through GitHub Actions.
+189 tests cover the spreadsheet block detection and query validation, the document splitting, the prompt assembly and context budgeting, the download and retry state machine, and the view model orchestration. They use hand written test doubles rather than a mocking library, and run on every push through GitHub Actions.
 
 ```bash
 dotnet test
@@ -148,12 +148,12 @@ The architecture was designed to be extended.
 - [x] **Hardware Acceleration:** GPU offloading through the Vulkan backend, toggleable at runtime, with automatic fallback to the CPU.
 - [x] **Prompt Format per Model:** Talking to each model in the template it was trained on, since a vision model and an instruct model do not share one.
 - [x] **Document Attachment Split Out:** Moving the attachment state, the parted reading and the spreadsheet query into their own view model, so the chat one is left with conversations, sending and generation.
+- [x] **Inference Service Split:** Separating the loaded model, which owns the weights, the context and the executor, from the service that turns a conversation into a prompt and a stream of text.
 
 **Next**
 
 - [ ] **Looking Things Up:** Consulting the internet when a question needs current information, with the model deciding in the background whether external context is needed.
 - [ ] **A Stronger Vision Model:** Moving to LLaVA 1.6 or Qwen2-VL once LLamaSharp supports them, since 1.5 is the weakest link in the image path.
-- [ ] **Splitting the Inference Service:** Separating the model lifecycle, which loads weights and manages the context, from the generation that uses it. `LlamaSharpService` is now the largest file in the solution.
 
 ## ⚙️ Technology Stack
 * **Language:** C# 13 / .NET 9.0
